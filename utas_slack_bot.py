@@ -21,7 +21,7 @@ def send_msg(msg, channel=NOTIFICATION_CHANNEL, as_block=False):
 
     logging.basicConfig(level=logging.DEBUG)
 
-    slack_token = "xoxb-952046195798-1015535820116-UFCiaj1MSIP1qSrE49voaRep"  # os.environ["SLACK_API_TOKEN"]
+    slack_token = "xoxb-952046....."  # os.environ["SLACK_API_TOKEN"]
     client = WebClient(token=slack_token)
 
     try:
