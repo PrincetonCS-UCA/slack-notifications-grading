@@ -9,6 +9,7 @@ python-dateutil = "*"
 pytz = "*"
 requests = "*"
 slackclient = "*"
+pyyaml = "*"
 
 [dev-packages]
 autopep8 = "*"

@@ -34,3 +34,9 @@ and maybe have the ability to have multiple blocks. The last template property i
 - `utas_slack_bot.py` is the bot that used to send Slack notifications from webhooks.
 - This is how to store both the codePost key and the Slack OAuth key securely in the repository: https://docs.github.com/en/actions/security-guides/encrypted-secrets and how to use it in the GitHub Actions flow. At the bot level, you will read it from the environment.
 - In the `.github/workflows/scrape.yaml`, the last action is to commit any `./data/*.json` files that have changed. So you can output in that folder any state that you would like to recuperate on the next call.
+
+## Local development
+
+- Clone repository: `git clone https://github.com/PrincetonCS-UCA/slack-grading-notifications/`
+- Install the dependencies in a virtual environment: `pipenv install`
+- Run in the venv: `pipenv run python script.py`
