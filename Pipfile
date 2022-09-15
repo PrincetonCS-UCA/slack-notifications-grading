@@ -4,18 +4,15 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [packages]
-bs4 = "*"
+codepost = "*"
+python-dateutil = "*"
 pytz = "*"
 requests = "*"
-waybackpy = "*"
-html-to-csv = "*"
-lxml = "*"
-html5lib = "*"
-matplotlib = "*"
+slackclient = "*"
 
 [dev-packages]
-ipykernel = "*"
 autopep8 = "*"
+ipykernel = "*"
 
 [requires]
 python_version = "3.9"
