@@ -430,7 +430,7 @@ def main():
     # configure the slack token
     slack_client = WebClient(token=secrets['SLACK_TOKEN'])
     try:
-        # validate the token
+        # validate the token using some random GET request
         slack_client.chat_scheduledMessages_list()
     except SlackApiError as e:
         # e.response should be: {"ok": False, "error": "invalid_auth"}
@@ -474,6 +474,7 @@ def main():
         return
 
     # TODO: allow changing the key with `MultiFernet`
+    # https://cryptography.io/en/latest/fernet/#cryptography.fernet.MultiFernet.rotate
     crypto = Fernet(secrets['DECRYPTION_KEY'])
 
     cached_data, errors = read_cached_data(crypto, config)
