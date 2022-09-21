@@ -5,15 +5,16 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Run at every 5th minute past every hour from 9 through 18 on every
-    # day-of-week from Wednesday through Sunday
-    # https://crontab.guru/#0_15_*_*_3,4,5,6
-    - cron: "0 15 * * 3,4,5,6"
+    # Runs every half hour on Wednesday, Thursday, and Friday.
+    # https://crontab.guru/#0,30_*_*_*_3,4,5
+    # - cron: '0,30 * * * 3,4,5'
+    # Temp value of midnight on January 1
+    - cron: '0 0 1 1 *'
 
-name: Scrape Update
+name: UTAs Slack Bot Notifications
 jobs:
   update-logs:
-    name: Scrape Update
+    name: UTAs Slack Bot Notifications
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -31,7 +32,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: "3.9"
+          python-version: '3.9'
 
       - name: Install pipenv
         run: |
@@ -50,16 +51,19 @@ jobs:
           touch Pipfile
           pipenv install --deploy --dev
 
-      - name: Scrape content and output
+      - name: Get data and send notification
+        env:
+          CODEPOST_API_KEY: ${{ secrets.CODEPOST_API_KEY }}
+          SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
         run: |
-          pipenv run python ./script.py
+          pipenv run python ./utas_slack_bot.py
 
       - name: Commit generated logs 🚀
         uses: EndBug/add-and-commit@v9
         with:
-          message: "Commit updated data"
-          add: "./data/*.json"
-          cwd: "."
+          message: 'Commit updated data'
+          add: './data/*.json ERRORS.txt'
+          cwd: '.'
           force: true
           default_author: github_actions
         env:
