@@ -62,7 +62,7 @@ jobs:
         uses: EndBug/add-and-commit@v9
         with:
           message: 'Commit updated data'
-          add: './data/*.json ERRORS.txt'
+          add: './data/*/* ERRORS.txt'
           cwd: '.'
           force: true
           default_author: github_actions

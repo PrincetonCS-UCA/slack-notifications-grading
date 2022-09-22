@@ -32,7 +32,7 @@ submissions, etc.), and to trigger a Slack notification if changes were found.
 
 - **Deterministic Finite Automaton:**
 
-  - Read from `data/*.json`,
+  - Read from `data/*`,
   - Fetch recent data from codePost,
   - Compare to cached data,
   - If there are changes, trigger a Slack notification,
@@ -40,8 +40,8 @@ submissions, etc.), and to trigger a Slack notification if changes were found.
 
 ## References
 
-- `utas_slack_bot.py` is the bot that used to send Slack notifications from
-  webhooks.
+- `utas_slack_bot.py` is the bot that is used to send Slack notifications based
+  on updated data from codePost.
 - This is how to store both the codePost key and the Slack OAuth key securely in
   the repository to use them in the GitHub Actions flow:
   https://docs.github.com/en/actions/security-guides/encrypted-secrets.
