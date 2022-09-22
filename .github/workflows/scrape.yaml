@@ -55,6 +55,7 @@ jobs:
         env:
           CODEPOST_API_KEY: ${{ secrets.CODEPOST_API_KEY }}
           SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          DECRYPTION_KEY: ${{ secrets.DECRYPTION_KEY }}
         run: |
           pipenv run python ./utas_slack_bot.py
 
