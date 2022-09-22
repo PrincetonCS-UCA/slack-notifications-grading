@@ -12,7 +12,6 @@ from datetime import datetime
 from pathlib import Path
 
 import codepost
-import codepost.errors
 import yaml
 from cryptography.fernet import Fernet, InvalidToken
 from slack import WebClient
@@ -42,8 +41,8 @@ def now(filename=False):
     """Returns the current time in UTC as a string.
 
     Since UTC does not observe daylight savings, this means that each
-    call to this function should theoretically return something
-    different.
+    call to this function (with `filename`=False) should theoretically
+    return something different.
     """
     if filename:
         fmt = '%Y-%m-%d %H%M%S'
@@ -63,7 +62,8 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
     """Sends a message on Slack to the specified channel. If `as_block`
     is True, the message is sent as a markdown block.
 
-    Returns the request response, or the error response.
+    Returns the request response, and the error response or None if
+    there was no error.
     """
 
     try:
@@ -94,8 +94,9 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
 
 
 def check_assignment_updates(assignment, cached=None):
-    """Checks the codePost assignment for updates comparing to the
-    cached data.
+    """Checks the codePost assignment for updates, comparing to the
+    cached data. Returns whether there were updates and the new data to
+    store for this assignment.
     """
 
     num_total = 0
@@ -160,8 +161,9 @@ def check_assignment_updates(assignment, cached=None):
 def check_course_updates(
         slack_client, channel,
         course_period, course, assignments, cached=None):
-    """Checks the codePost course for updates comparing to the cached
-    data.
+    """Checks the codePost course for updates, comparing to the cached
+    data. Returns the new data to store for this course, and a list of
+    errors.
     """
     if cached is None:
         cached = {}
@@ -214,7 +216,8 @@ def check_course_updates(
 
 def process_courses(slack_client, courses, channels, cached):
     """Processes the assignments in the given courses and sends
-    notifications to the specified Slack channel.
+    notifications to the specified Slack channel. Returns the new data
+    to store, and a list of errors.
     """
     data = {}
     errors = []
@@ -248,7 +251,7 @@ def process_courses(slack_client, courses, channels, cached):
 
 
 def read_cached_data(crypto, courses):
-    """Returns the unencrypted cached data for the given courses."""
+    """Reads the unencrypted cached data for the given courses."""
 
     # ensure the folder exists
     CACHED_DATA_FOLDER.mkdir(parents=True, exist_ok=True)
@@ -271,7 +274,8 @@ def read_cached_data(crypto, courses):
         try:
             decoded_data_bytes = crypto.decrypt(encoded_data_bytes)
         except InvalidToken:
-            # fail immediately
+            # fail immediately: assume the same key was used for all
+            # the saved data
             errors = [_error('Invalid decryption key for stored data')]
             return None, errors
 
@@ -301,7 +305,11 @@ def write_data(crypto, data):
 # ======================================================================
 
 
-def read_slack_channels_file():
+def read_slack_channels_file(slack_client):
+    """Reads the Slack channels file.
+    Validates all the channel ids.
+    Returns the dict of channels, and a list of errors.
+    """
     errors = []
 
     if not SLACK_CHANNELS_FILE.exists():
@@ -323,13 +331,31 @@ def read_slack_channels_file():
         if not isinstance(channel_id, str):
             errors.append(_error(
                 'Slack channels file has an invalid channel id for '
-                'channel "{}"',
+                'channel "{}" (expected str)',
                 channel))
+            continue
+        try:
+            slack_client.chat_scheduledMessages_list(channel=channel_id)
+        except SlackApiError as e:
+            # e.response should be:
+            # {"ok": False, "error": "invalid_channel"}
+            if (e.response and
+                not e.response.get('ok', False) and
+                    e.response.get('error', None) == 'invalid_channel'):
+                errors.append(_error(
+                    'Invalid id for Slack channel "{}"', channel))
+            else:
+                raise
 
     return channels, errors
 
 
 def read_config_file(channels):
+    """Reads the config file.
+    Fails on missing required keys, unexpected types, repeated course
+    name and period pairs, and unknown channel names.
+    Returns the list of courses, and a list of errors.
+    """
     errors = []
 
     if not CONFIG_FILE.exists():
@@ -393,6 +419,7 @@ def read_config_file(channels):
 
 
 def save_errors(errors):
+    """Appends the given errors to the errors file."""
     if ERROR_LOGS_FILE.exists():
         existing_errors = ERROR_LOGS_FILE.read_text(encoding='utf-8')
     else:
@@ -445,25 +472,7 @@ def main():
         save_errors(errors)
         return
 
-    channels, errors = read_slack_channels_file()
-    if len(errors) > 0:
-        save_errors(errors)
-        return
-
-    # make sure all the channels are valid for this token
-    for channel, channel_id in channels.items():
-        try:
-            slack_client.chat_scheduledMessages_list(channel=channel_id)
-        except SlackApiError as e:
-            # e.response should be:
-            # {"ok": False, "error": "invalid_channel"}
-            if (e.response and
-                not e.response.get('ok', False) and
-                    e.response.get('error', None) == 'invalid_channel'):
-                errors.append(_error(
-                    'Invalid id for Slack channel: {}', channel))
-            else:
-                raise
+    channels, errors = read_slack_channels_file(slack_client)
     if len(errors) > 0:
         save_errors(errors)
         return
