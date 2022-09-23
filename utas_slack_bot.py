@@ -19,11 +19,12 @@ from slack.errors import SlackApiError
 
 # ======================================================================
 
-ERROR_LOGS_FILE = Path('ERRORS.txt')
-
 # The cached data is separated into one folder for each course,
 # then one file for each time the course's data is updated
 CACHED_DATA_FOLDER = Path('./data')
+
+ERROR_LOGS_FILE = CACHED_DATA_FOLDER / 'ERRORS.txt'
+
 CONFIG_FILE = Path('config.yaml')
 SLACK_CHANNELS_FILE = Path('channels.yaml')
 
@@ -423,6 +424,7 @@ def save_errors(errors):
     if ERROR_LOGS_FILE.exists():
         existing_errors = ERROR_LOGS_FILE.read_text(encoding='utf-8')
     else:
+        ERROR_LOGS_FILE.parent.mkdir(parents=True, exist_ok=True)
         existing_errors = ''
     ERROR_LOGS_FILE.write_text(
         existing_errors + '\n'.join(errors) + '\n',
