@@ -29,8 +29,9 @@ CONFIG_FILE = Path('config.yaml')
 SLACK_CHANNELS_FILE = Path('channels.yaml')
 
 UPDATE_MESSAGE_TEMPLATE = (
-    '{assignment}: {done:.2%} done ' +
-    '({total} submitted, {finalized} finalized, {drafts} drafts)'
+    '*{assignment}*: {done:.2%} done ' +
+    '({finalized} finalized, {drafts} drafts, ' +
+    '{unclaimed} left to grade)'
     # FIXME: add support for this
     # 'Graders who most recently finalized: {graders_finalized}'
 )
@@ -194,14 +195,15 @@ def check_course_updates(
         total = assignment_data['total']
         finalized = assignment_data['finalized']
         drafts = assignment_data['drafts']
+        unclaimed = total - (finalized + drafts)
         if total == 0:
             done = 0
         else:
             done = finalized / total
 
         update_msg = UPDATE_MESSAGE_TEMPLATE.format(
-            assignment=assignment_name,
-            done=done, total=total, finalized=finalized, drafts=drafts,
+            assignment=assignment_name, done=done,
+            finalized=finalized, drafts=drafts, unclaimed=unclaimed,
             graders_finalized=''
         )
         # the response doesn't matter
