@@ -1,0 +1,2 @@
+[2022-09-23 03:38:28.956935] Slack API error: {'ok': False, 'error': 'missing_scope', 'needed': 'chat:write:bot', 'provided': 'usergroups:write'}
+[2022-09-23 03:38:32.326571] Slack API error: {'ok': False, 'error': 'missing_scope', 'needed': 'chat:write:bot', 'provided': 'usergroups:write'}
