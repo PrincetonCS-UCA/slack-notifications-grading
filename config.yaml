@@ -2,4 +2,4 @@ sources:
   - course: 'COS126'
     period: 'F2022'
     channel: '#126-grading-notifications'
-    assignments: ['Hello', 'Loops']
+    assignments: ['NBody']
