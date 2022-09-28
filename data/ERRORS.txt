@@ -6,3 +6,4 @@
 [2022-09-28 20:54:04.472587] Slack API error: {'ok': False, 'error': 'not_in_channel'}
 [2022-09-28 21:03:42.693814] Slack API error: {'ok': False, 'error': 'not_in_channel'}
 [2022-09-28 21:29:53.804355] Slack API error: {'ok': False, 'error': 'not_in_channel'}
+[2022-09-28 21:31:16.534843] Slack API error: {'ok': False, 'error': 'not_in_channel'}
