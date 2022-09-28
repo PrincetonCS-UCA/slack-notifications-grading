@@ -90,6 +90,9 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
     there was no error.
     """
 
+    print('sending message to channel:', channel_id)
+    print(msg)
+
     try:
         if as_block:
             response = slack_client.chat_postMessage(
