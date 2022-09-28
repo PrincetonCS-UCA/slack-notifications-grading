@@ -55,7 +55,9 @@ def now(filename=False):
 
 def _error(msg, *args, **kwargs):
     """Returns the formatted message with the current timestamp."""
-    return f'[{now()}] {msg.format(*args, **kwargs)}'
+    formatted = msg.format(*args, **kwargs)
+    print('Error:', formatted)
+    return f'[{now()}] {formatted}'
 
 # ======================================================================
 
@@ -150,10 +152,13 @@ def check_assignment_updates(assignment, cached=None):
         'submissions': submissions,
     }
 
-    changed = cached is None or any(
-        cached.get(key, None) != data[key] for key in
-        ('total', 'finalized', 'drafts', 'unclaimed')
-    )
+    if num_total == 0:
+        changed = False
+    else:
+        changed = cached is None or any(
+            cached.get(key, None) != data[key] for key in
+            ('total', 'finalized', 'drafts', 'unclaimed')
+        )
 
     return changed, data
 
@@ -192,6 +197,7 @@ def check_course_updates(
         if not changed:
             continue
 
+        print('assignment changed: sending notification')
         total = assignment_data['total']
         finalized = assignment_data['finalized']
         drafts = assignment_data['drafts']
