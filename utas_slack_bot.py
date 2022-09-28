@@ -32,8 +32,9 @@ UPDATE_MESSAGE_TEMPLATE = (
     '*{assignment}*: {done:.2%} done ' +
     '({finalized} finalized, {drafts} drafts, ' +
     '{unclaimed} left to grade)'
-    # FIXME: add support for this
-    # 'Graders who most recently finalized: {graders_finalized}'
+)
+GRADERS_RECENTLY_FINALIZED_TEMPLATE = (
+    'Graders who recently finalized: {graders}'
 )
 
 # ======================================================================
@@ -58,6 +59,25 @@ def _error(msg, *args, **kwargs):
     formatted = msg.format(*args, **kwargs)
     print('Error:', formatted)
     return f'[{now()}] {formatted}'
+
+# ======================================================================
+
+
+def _build_notification_msg(**kwargs):
+    msg = UPDATE_MESSAGE_TEMPLATE.format(**kwargs)
+    graders_finalized = kwargs.get('graders_finalized', set())
+    if len(graders_finalized) > 0:
+        graders = []
+        for grader in graders_finalized:
+            # remove "@princeton.edu"
+            grader = grader[:-len('@princeton.edu')]
+            # put in backticks
+            graders.append(f'`{grader}`')
+        graders_str = ', '.join(graders)
+        msg += '\n' + GRADERS_RECENTLY_FINALIZED_TEMPLATE.format(
+            graders=graders_str)
+    return msg
+
 
 # ======================================================================
 
@@ -113,22 +133,34 @@ def check_assignment_updates(assignment, cached=None):
     if cached is not None and 'submissions' in cached:
         submissions = cached['submissions']
 
+    # the graders who finalized between the cached and the current state
+    graders_finalized = set()
+
     # get info about each submission
     for submission in assignment.list_submissions():
+        submission_id = str(submission.id)
+        if submission_id not in submissions:
+            submissions[submission_id] = {}
+        submission_data = submissions[submission_id]
+
         num_total += 1
         if submission.isFinalized:
             num_finalized += 1
             status = 'finalized'
+            # check if it was finalized before
+            if len(submission_data) == 0:
+                prev_status = 'unknown'
+            else:
+                max_key = max(submission_data.keys())
+                prev_status = submission_data[max_key]['status']
+            if prev_status != status:
+                graders_finalized.add(submission.grader)
         elif submission.grader is not None:
             num_drafts += 1
             status = 'draft'
         else:
             num_unclaimed += 1
             status = 'unclaimed'
-
-        if submission.id not in submissions:
-            submissions[submission.id] = {}
-        submission_data = submissions[submission.id]
 
         timestamp = now()
         if timestamp in submission_data:
@@ -150,6 +182,7 @@ def check_assignment_updates(assignment, cached=None):
         'drafts': num_drafts,
         'unclaimed': num_unclaimed,
         'submissions': submissions,
+        'graders_finalized': graders_finalized,
     }
 
     if num_total == 0:
@@ -192,6 +225,7 @@ def check_course_updates(
 
         changed, assignment_data = check_assignment_updates(
             assignment, assignment_cache)
+        graders_finalized = assignment_data.pop('graders_finalized')
         data[assignment_name] = assignment_data
 
         if not changed:
@@ -207,10 +241,10 @@ def check_course_updates(
         else:
             done = finalized / total
 
-        update_msg = UPDATE_MESSAGE_TEMPLATE.format(
+        update_msg = _build_notification_msg(
             assignment=assignment_name, done=done,
             finalized=finalized, drafts=drafts, unclaimed=unclaimed,
-            graders_finalized=''
+            graders_finalized=graders_finalized
         )
         # the response doesn't matter
         _, error = send_slack_msg(
