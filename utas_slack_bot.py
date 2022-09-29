@@ -161,17 +161,18 @@ def check_assignment_updates(assignment, cached=None):
             submissions[submission_id] = {}
         submission_data = submissions[submission_id]
 
+        if len(submission_data) == 0:
+            last_status = {'status': 'unknown', 'grader': 'unknown'}
+        else:
+            max_key = max(submission_data.keys())
+            last_status = submission_data[max_key]
+
         num_total += 1
         if submission.isFinalized:
             num_finalized += 1
             status = 'finalized'
             # check if it was finalized before
-            if len(submission_data) == 0:
-                prev_status = 'unknown'
-            else:
-                max_key = max(submission_data.keys())
-                prev_status = submission_data[max_key]['status']
-            if prev_status != status:
+            if last_status['status'] != 'finalized':
                 graders_finalized.add(submission.grader)
         elif submission.grader is not None:
             num_drafts += 1
@@ -179,6 +180,15 @@ def check_assignment_updates(assignment, cached=None):
         else:
             num_unclaimed += 1
             status = 'unclaimed'
+
+        current_status = {
+            'status': status,
+            'grader': submission.grader,
+        }
+
+        if last_status == current_status:
+            # it's the same; don't update
+            continue
 
         timestamp = now()
         if timestamp in submission_data:
@@ -189,10 +199,7 @@ def check_assignment_updates(assignment, cached=None):
                 i += 1
                 new_timestamp = f'{timestamp} {i}'
             timestamp = new_timestamp
-        submission_data[timestamp] = {
-            'status': status,
-            'grader': submission.grader,
-        }
+        submission_data[timestamp] = current_status
 
     data = {
         'total': num_total,
