@@ -19,8 +19,18 @@ submissions, etc.), and to trigger a Slack notification if changes were found.
     - course: "COS126"
       period: "F2022"
       channel: "#126-grading-notifications"
-      assignments: ["Hello", "Loops", "Recursion"]
+      assignments:
+        - name: "Hello"
+          dates: "2022-09-14 - 2022-09-18"
+        - name: "Loops"
+          dates: "2022-09-21 - 2022-09-25"
+        - name: "NBody"
+          dates: "2022-09-28 - 2022-10-02"
   ```
+
+  For each assignment, the `dates` value is a date range in the format
+  `YYYY-MM-DD - YYYY-MM-DD` which specifies when that assignment should be
+  processed. Dates will be considered in Eastern Time.
 
   <!-- monitor: ["available", "graded"]
       messages:

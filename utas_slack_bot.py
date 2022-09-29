@@ -8,10 +8,11 @@ of grading from codePost.
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import codepost
+import pytz
 import yaml
 from cryptography.fernet import Fernet, InvalidToken
 from slack import WebClient
@@ -39,6 +40,20 @@ GRADERS_RECENTLY_FINALIZED_TEMPLATE = (
 
 # ======================================================================
 
+UTC_TZ = pytz.utc
+EASTERN_TZ = pytz.timezone('US/Eastern')
+DATE_FMT = '%Y-%m-%d'
+
+NO_DAY = timedelta()
+ONE_DAY = timedelta(days=1)
+
+# ======================================================================
+
+
+def now_dt():
+    """Returns the current datetime in UTC."""
+    return UTC_TZ.localize(datetime.utcnow())
+
 
 def now(filename=False):
     """Returns the current time in UTC as a string.
@@ -51,7 +66,7 @@ def now(filename=False):
         fmt = '%Y-%m-%d %H%M%S'
     else:
         fmt = '%Y-%m-%d %H:%M:%S.%f'
-    return datetime.utcnow().strftime(fmt)
+    return now_dt().strftime(fmt)
 
 
 def _error(msg, *args, **kwargs):
@@ -216,8 +231,12 @@ def check_course_updates(
 
     course_assignments = {a.name: a for a in course.assignments}
 
-    for assignment_name in assignments:
+    for assignment in assignments:
+        assignment_name = assignment['name']
         print('processing assignment:', assignment_name)
+        if not assignment['start'] <= now_dt() < assignment['end']:
+            print('not in the proper date range')
+            continue
         if assignment_name not in course_assignments:
             errors.append(_error(
                 'Course "{}" does not have an assignment called "{}"',
@@ -260,7 +279,7 @@ def check_course_updates(
 # ======================================================================
 
 
-def process_courses(slack_client, courses, channels, cached):
+def process_courses(slack_client, config, channels, cached):
     """Processes the assignments in the given courses and sends
     notifications to the specified Slack channel. Returns the new data
     to store, and a list of errors.
@@ -268,7 +287,7 @@ def process_courses(slack_client, courses, channels, cached):
     data = {}
     errors = []
 
-    for course_period, course_info in courses.items():
+    for course_period, course_info in config.items():
         print('processing course:', course_period)
         courses = codepost.course.list_available(
             name=course_info['course'], period=course_info['period'])
@@ -395,6 +414,76 @@ def read_slack_channels_file(slack_client):
 
     return channels, errors
 
+# ======================================================================
+
+
+def _validate_config_course(index, config_course):
+    """Validates a course config dict.
+    Returns a message and None if the course is invalid; otherwise,
+    returns None and the course dict.
+    """
+
+    _invalid_msg = (
+        f'Config file has an invalid course format at index {index}'
+    )
+
+    def invalid(msg=None):
+        if msg is None:
+            msg = _invalid_msg
+        return msg, None
+
+    if not isinstance(config_course, dict):
+        return invalid()
+
+    course = {}
+
+    # must be strs
+    for key in ('course', 'period', 'channel'):
+        if key not in config_course:
+            return invalid()
+        if not isinstance(config_course[key], str):
+            return invalid()
+        course[key] = config_course[key]
+
+    if 'assignments' not in config_course:
+        return invalid()
+    if not isinstance(config_course['assignments'], list):
+        return invalid()
+
+    assignments = []
+    for j, config_assignment in enumerate(config_course['assignments']):
+        _invalid_assignment_msg = \
+            _invalid_msg + f', assignment index {j}'
+        _invalid_date_range_msg = \
+            _invalid_assignment_msg + ': invalid date range'
+        if not isinstance(config_assignment, dict):
+            return invalid(_invalid_assignment_msg)
+        assignment = {}
+        for key in ('name', 'dates'):
+            if key not in config_assignment:
+                return invalid(_invalid_assignment_msg)
+            if not isinstance(config_assignment[key], str):
+                return invalid(_invalid_assignment_msg)
+            assignment[key] = config_assignment[key]
+        dates = assignment.pop('dates').split(' - ')
+        if len(dates) != 2:
+            return invalid(_invalid_date_range_msg)
+        for key, date_str, delta in zip(
+                ('start', 'end'), dates, (NO_DAY, ONE_DAY)):
+            try:
+                date = datetime.strptime(date_str.strip(), DATE_FMT)
+            except ValueError:
+                return invalid(_invalid_date_range_msg)
+            date += delta
+            # convert to eastern, then to utc
+            date_utc = EASTERN_TZ.localize(date).astimezone(UTC_TZ)
+            assignment[key] = date_utc
+        assignments.append(assignment)
+
+    course['assignments'] = assignments
+
+    return None, course
+
 
 def read_config_file(channels):
     """Reads the config file.
@@ -418,33 +507,10 @@ def read_config_file(channels):
         return None, errors
 
     courses = {}
-    for i, course_config in enumerate(config['sources']):
-        invalid = False
-        course = {}
-        for key in ('course', 'period', 'channel'):
-            if key not in course_config:
-                invalid = True
-                continue
-            if not isinstance(course_config[key], str):
-                invalid = True
-                continue
-            course[key] = course_config[key]
-        for key in ('assignments',):
-            if key not in course_config:
-                invalid = True
-                continue
-            if not isinstance(course_config[key], list):
-                invalid = True
-                continue
-            for val in course_config[key]:
-                if not isinstance(val, str):
-                    invalid = True
-                    break
-            course[key] = course_config[key]
-        if invalid:
-            errors.append(_error(
-                'Config file has an invalid course format at index {}',
-                i))
+    for i, config_course in enumerate(config['sources']):
+        invalid_msg, course = _validate_config_course(i, config_course)
+        if invalid_msg is not None:
+            errors.append(_error(invalid_msg))
             continue
         course_period = course['course'] + ' ' + course['period']
         if course_period in courses:

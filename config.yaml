@@ -2,4 +2,10 @@ sources:
   - course: 'COS126'
     period: 'F2022'
     channel: '#126-grading-notifications'
-    assignments: ['NBody']
+    assignments:
+      - name: 'Hello'
+        dates: '2022-09-14 - 2022-09-18'
+      - name: 'Loops'
+        dates: '2022-09-21 - 2022-09-25'
+      - name: 'NBody'
+        dates: '2022-09-28 - 2022-10-02'
