@@ -251,6 +251,7 @@ def check_course_updates(
         data[assignment_name] = assignment_data
 
         if not changed:
+            print('no change')
             continue
 
         print('assignment changed: sending notification')
