@@ -107,6 +107,7 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
 
     print('sending message to channel:', channel_id)
     print(msg)
+    return None, None
 
     try:
         if as_block:
@@ -234,6 +235,7 @@ def check_course_updates(
         cached = {}
 
     data = {}
+    changed = False
     errors = []
 
     course_assignments = {a.name: a for a in course.assignments}
@@ -252,15 +254,16 @@ def check_course_updates(
         assignment = course_assignments[assignment_name]
         assignment_cache = cached.get(assignment_name, None)
 
-        changed, assignment_data = check_assignment_updates(
+        assignment_changed, assignment_data = check_assignment_updates(
             assignment, assignment_cache)
         graders_finalized = assignment_data.pop('graders_finalized')
         data[assignment_name] = assignment_data
 
-        if not changed:
+        if not assignment_changed:
             print('no change')
             continue
 
+        changed = True
         print('assignment changed: sending notification')
         total = assignment_data['total']
         finalized = assignment_data['finalized']
@@ -282,7 +285,7 @@ def check_course_updates(
         if error is not None:
             errors.append(_error('Slack API error: {}', error))
 
-    return data, errors
+    return data, changed, errors
 
 # ======================================================================
 
@@ -293,6 +296,7 @@ def process_courses(slack_client, config, channels, cached):
     to store, and a list of errors.
     """
     data = {}
+    changed = False
     errors = []
 
     for course_period, course_info in config.items():
@@ -307,18 +311,20 @@ def process_courses(slack_client, config, channels, cached):
         # take the first course if there are duplicates
         course = courses[0]
         course_cache = cached.get(course_period, None)
-        course_data, course_errors = check_course_updates(
-            slack_client,
-            channels[course_info['channel']],
-            course_period,
-            course,
-            course_info['assignments'],
-            course_cache)
+        course_data, course_changed, course_errors = \
+            check_course_updates(
+                slack_client,
+                channels[course_info['channel']],
+                course_period,
+                course,
+                course_info['assignments'],
+                course_cache)
         if len(course_errors) > 0:
             errors += course_errors
         data[course_period] = course_data
+        changed = changed or course_changed
 
-    return data, errors
+    return data, changed, errors
 
 # ======================================================================
 
@@ -612,12 +618,14 @@ def main():
         save_errors(errors)
         return
 
-    data, errors = process_courses(
+    data, changed, errors = process_courses(
         slack_client, config, channels, cached_data)
     if len(errors) > 0:
         save_errors(errors)
 
-    write_data(crypto, data)
+    if changed:
+        print('saving new data')
+        write_data(crypto, data)
 
 
 if __name__ == '__main__':
