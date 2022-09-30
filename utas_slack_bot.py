@@ -24,7 +24,7 @@ from slack.errors import SlackApiError
 # then one file for each time the course's data is updated
 CACHED_DATA_FOLDER = Path('./data')
 
-ERROR_LOGS_FILE = CACHED_DATA_FOLDER / 'ERRORS.txt'
+ERROR_LOGS_FILE = CACHED_DATA_FOLDER / '_ERRORS.txt'
 
 CONFIG_FILE = Path('config.yaml')
 SLACK_CHANNELS_FILE = Path('channels.yaml')
@@ -331,29 +331,22 @@ def process_courses(slack_client, config, channels, cached):
 def read_cached_data(crypto, courses):
     """Reads the unencrypted cached data for the given courses."""
 
-    # ensure the folder exists
-    CACHED_DATA_FOLDER.mkdir(parents=True, exist_ok=True)
-
     data = {}
 
-    for course_period in courses.keys():
-        course_folder = CACHED_DATA_FOLDER / course_period
-        if not course_folder.exists():
-            continue
+    if not CACHED_DATA_FOLDER.exists():
+        return data, []
 
-        # each file is named by the timestamp it was created, so look
-        # for the latest one
-        filepath = max(course_folder.glob('*'), default=None, key=str)
-        if filepath is None:
-            # no files
+    for course_period in courses.keys():
+        filepath = CACHED_DATA_FOLDER / (course_period + '.txt')
+        if not filepath.exists():
             continue
 
         encoded_data_bytes = filepath.read_bytes()
         try:
             decoded_data_bytes = crypto.decrypt(encoded_data_bytes)
         except InvalidToken:
-            # fail immediately: assume the same key was used for all
-            # the saved data
+            # fail immediately: assume the same key was used for all the
+            # saved data
             errors = [_error('Invalid decryption key for stored data')]
             return None, errors
 
@@ -370,12 +363,7 @@ def write_data(crypto, data):
     CACHED_DATA_FOLDER.mkdir(parents=True, exist_ok=True)
 
     for course_period, course_data in data.items():
-        filename = now(filename=True) + '.txt'
-        course_folder = CACHED_DATA_FOLDER / course_period
-        # create the folder if it doesn't exist
-        course_folder.mkdir(parents=True, exist_ok=True)
-        filepath = course_folder / filename
-
+        filepath = CACHED_DATA_FOLDER / (course_period + '.txt')
         data_str = json.dumps(course_data)
         data_bytes = data_str.encode(encoding='utf-8')
         filepath.write_bytes(crypto.encrypt(data_bytes))
