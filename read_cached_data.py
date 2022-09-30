@@ -15,7 +15,7 @@ from cryptography.fernet import Fernet, InvalidToken
 # ======================================================================
 
 HELP_USAGE = (
-    f'Usage: python {Path(__file__).name} FILE\n'
+    f'Usage: python {Path(__file__).name} FILE [OUTPUT_FILE]\n'
     '\n'
     '  Read, unencrypt, and output the given file.'
 )
@@ -50,8 +50,14 @@ def main():
         return
 
     data = json.loads(decoded_data_bytes)
-    # print it nicely
-    print(json.dumps(data, indent=2))
+    data_str = json.dumps(data, indent=2)
+
+    if len(args) >= 2:
+        output_filepath = Path(args[1])
+        output_filepath.write_text(data_str, encoding='utf-8')
+    else:
+        # print it nicely
+        print(data_str)
 
 
 if __name__ == '__main__':
