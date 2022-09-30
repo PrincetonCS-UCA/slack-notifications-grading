@@ -107,7 +107,6 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
 
     print('sending message to channel:', channel_id)
     print(msg)
-    return None, None
 
     try:
         if as_block:
