@@ -210,7 +210,7 @@ def check_assignment_updates(assignment, cached=None):
         'graders_finalized': graders_finalized,
     }
 
-    if num_total == 0 or num_unclaimed == num_total:
+    if num_total == 0 or num_finalized == 0:
         changed = False
     else:
         changed = cached is None or any(
