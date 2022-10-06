@@ -146,10 +146,42 @@ def check_assignment_updates(assignment, cached=None):
     num_drafts = 0
     num_unclaimed = 0
     # maps: submission id -> timestamp ->
-    #   status of "unclaimed", "draft", or "finalized"
-    submissions = {}
+    #   status of "unclaimed", "draft", "finalized", or "deleted"
     if cached is not None and 'submissions' in cached:
         submissions = cached['submissions']
+        deleted = set(submissions.keys())
+    else:
+        submissions = {}
+        deleted = set()
+
+    def get_last_status(submission_id):
+        """Returns the last status of the given submission."""
+        NO_STATUS = {'status': 'unknown', 'grader': 'unknown'}
+
+        submission_data = submissions.get(submission_id, {})
+
+        if len(submission_data) == 0:
+            return NO_STATUS
+
+        max_key = max(submission_data.keys())
+        return submission_data[max_key]
+
+    def save_status(submission_id, status):
+        """Writes the new status for the given submission."""
+        if submission_id not in submissions:
+            submissions[submission_id] = {}
+        submission_data = submissions[submission_id]
+
+        timestamp = now()
+        if timestamp in submission_data:
+            # impossible, but don't want to overwrite data
+            i = 1
+            new_timestamp = f'{timestamp} {i}'
+            while new_timestamp in submission_data:
+                i += 1
+                new_timestamp = f'{timestamp} {i}'
+            timestamp = new_timestamp
+        submission_data[timestamp] = status
 
     # the graders who finalized between the cached and the current state
     graders_finalized = set()
@@ -157,15 +189,9 @@ def check_assignment_updates(assignment, cached=None):
     # get info about each submission
     for submission in assignment.list_submissions():
         submission_id = str(submission.id)
-        if submission_id not in submissions:
-            submissions[submission_id] = {}
-        submission_data = submissions[submission_id]
+        deleted.discard(submission_id)
 
-        if len(submission_data) == 0:
-            last_status = {'status': 'unknown', 'grader': 'unknown'}
-        else:
-            max_key = max(submission_data.keys())
-            last_status = submission_data[max_key]
+        last_status = get_last_status(submission_id)
 
         num_total += 1
         if submission.isFinalized:
@@ -190,16 +216,26 @@ def check_assignment_updates(assignment, cached=None):
             # it's the same; don't update
             continue
 
-        timestamp = now()
-        if timestamp in submission_data:
-            # impossible, but don't want to overwrite data
-            i = 1
-            new_timestamp = f'{timestamp} {i}'
-            while new_timestamp in submission_data:
-                i += 1
-                new_timestamp = f'{timestamp} {i}'
-            timestamp = new_timestamp
-        submission_data[timestamp] = current_status
+        save_status(submission_id, current_status)
+
+    # mark as deleted
+    for submission_id in deleted:
+        if submission_id not in submissions:
+            # shouldn't happen, since these keys are taken from the dict
+            continue
+
+        last_status = get_last_status(submission_id)
+
+        current_status = {
+            'status': 'deleted',
+            'grader': None,
+        }
+
+        if last_status == current_status:
+            # it's the same; don't update
+            continue
+
+        save_status(submission_id, current_status)
 
     data = {
         'total': num_total,
