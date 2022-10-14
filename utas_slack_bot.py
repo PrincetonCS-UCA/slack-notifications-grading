@@ -278,7 +278,7 @@ def check_course_updates(
     for assignment in assignments:
         assignment_name = assignment['name']
         print('processing assignment:', assignment_name)
-        if not assignment['start'] <= now_dt() < assignment['end']:
+        if not assignment['valid_date_range']:
             print('not in the proper date range')
             continue
         if assignment_name not in course_assignments:
@@ -454,6 +454,16 @@ def read_slack_channels_file(slack_client):
 # ======================================================================
 
 
+def _valid_date_range(start, end):
+    if start is None and end is None:
+        return True
+    if start is None:
+        return now_dt() < end
+    if end is None:
+        return start <= now_dt()
+    return start <= now_dt() < end
+
+
 def _validate_config_course(index, config_course):
     """Validates a course config dict.
     Returns a message and None if the course is invalid; otherwise,
@@ -491,30 +501,39 @@ def _validate_config_course(index, config_course):
     for j, config_assignment in enumerate(config_course['assignments']):
         _invalid_assignment_msg = \
             _invalid_msg + f', assignment index {j}'
-        _invalid_date_range_msg = \
-            _invalid_assignment_msg + ': invalid date range'
         if not isinstance(config_assignment, dict):
             return invalid(_invalid_assignment_msg)
+
         assignment = {}
-        for key in ('name', 'dates'):
+        for key, required in (
+            ('name', True), ('start', False), ('end', False)
+        ):
             if key not in config_assignment:
+                if not required:
+                    assignment[key] = None
+                    continue
                 return invalid(_invalid_assignment_msg)
             if not isinstance(config_assignment[key], str):
                 return invalid(_invalid_assignment_msg)
             assignment[key] = config_assignment[key]
-        dates = assignment.pop('dates').split(' - ')
-        if len(dates) != 2:
-            return invalid(_invalid_date_range_msg)
-        for key, date_str, delta in zip(
-                ('start', 'end'), dates, (NO_DAY, ONE_DAY)):
+
+        for key, delta in zip(('start', 'end'), (NO_DAY, ONE_DAY)):
+            date_str = assignment[key]
+            if date_str is None:
+                continue
             try:
                 date = datetime.strptime(date_str.strip(), DATE_FMT)
             except ValueError:
-                return invalid(_invalid_date_range_msg)
+                return invalid(
+                    _invalid_assignment_msg + ': invalid date format')
             date += delta
             # convert to eastern, then to utc
             date_utc = EASTERN_TZ.localize(date).astimezone(UTC_TZ)
             assignment[key] = date_utc
+
+        assignment['valid_date_range'] = \
+            _valid_date_range(assignment['start'], assignment['end'])
+
         assignments.append(assignment)
 
     course['assignments'] = assignments

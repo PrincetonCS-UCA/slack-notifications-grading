@@ -21,16 +21,19 @@ submissions, etc.), and to trigger a Slack notification if changes were found.
       channel: "#126-grading-notifications"
       assignments:
         - name: "Hello"
-          dates: "2022-09-14 - 2022-09-18"
+          start: "2022-09-14"
+          end: "2022-09-18"
         - name: "Loops"
-          dates: "2022-09-21 - 2022-09-25"
+          start: "2022-09-21"
+          end: "2022-09-25"
         - name: "NBody"
-          dates: "2022-09-28 - 2022-10-02"
+          start: "2022-09-28"
+          end: "2022-10-02"
   ```
 
-  For each assignment, the `dates` value is a date range in the format
-  `YYYY-MM-DD - YYYY-MM-DD` which specifies when that assignment should be
-  processed. Dates will be considered in Eastern Time.
+  For each assignment, the `start` and `end` values defines a date range (with
+  possibly unbounded ends) for when that assignment should be processed. Dates
+  should be in the format `"YYYY-MM-DD"` and will be considered in Eastern Time.
 
   <!-- monitor: ["available", "graded"]
       messages:
