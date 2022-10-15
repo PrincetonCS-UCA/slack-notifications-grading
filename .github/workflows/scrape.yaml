@@ -5,11 +5,13 @@ on:
   pull_request:
     branches: [main]
   schedule:
+    # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule
     # Runs every half hour on Wednesday, Thursday, and Friday.
     # https://crontab.guru/#0,30_*_*_*_3,4,5
     - cron: "0,30 * * * 3,4,5"
-    # Temp value of midnight on January 1
-    - cron: "0 0 1 1 *"
+    # Runs every 3rd hour on Sunday, Monday, Tuesday, and Saturday.
+    # https://crontab.guru/#0_0/3_*_*_0,1,2,6
+    - cron: "0 0/3 * * 0,1,2,6"
 
 name: UTAs Slack Bot Notifications
 jobs:
