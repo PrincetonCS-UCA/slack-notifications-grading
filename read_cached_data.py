@@ -14,11 +14,13 @@ from cryptography.fernet import Fernet, InvalidToken
 
 # ======================================================================
 
+# yapf: disable
 HELP_USAGE = (
     f'Usage: python {Path(__file__).name} FILE [OUTPUT_FILE]\n'
     '\n'
     '  Read, unencrypt, and output the given file.'
 )
+# yapf: enable
 
 # ======================================================================
 

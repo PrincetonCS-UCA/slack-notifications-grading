@@ -29,6 +29,7 @@ ERROR_LOGS_FILE = CACHED_DATA_FOLDER / '_ERRORS.txt'
 CONFIG_FILE = Path('config.yaml')
 SLACK_CHANNELS_FILE = Path('channels.yaml')
 
+# yapf: disable
 UPDATE_MESSAGE_TEMPLATE = (
     '*{assignment}*: {done:.2%} done ' +
     '({finalized} finalized, {drafts} drafts, ' +
@@ -37,6 +38,7 @@ UPDATE_MESSAGE_TEMPLATE = (
 GRADERS_RECENTLY_FINALIZED_TEMPLATE = (
     'Graders who recently finalized: {graders}'
 )
+# yapf: enable
 
 # ======================================================================
 
@@ -74,6 +76,7 @@ def _error(msg, *args, **kwargs):
     formatted = msg.format(*args, **kwargs)
     print('Error:', formatted)
     return f'[{now()}] {formatted}'
+
 
 # ======================================================================
 
@@ -131,6 +134,7 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
         error = e.response
 
     return response, error
+
 
 # ======================================================================
 
@@ -248,20 +252,26 @@ def check_assignment_updates(assignment, cached=None):
 
     if num_total == 0 or num_finalized == 0:
         changed = False
+    elif cached is None:
+        # first time getting data
+        changed = True
     else:
-        changed = cached is None or any(
-            cached.get(key, None) != data[key] for key in
-            ('total', 'finalized', 'drafts', 'unclaimed')
-        )
+        changed = any(
+            cached.get(key, None) != data[key]
+            for key in ('total', 'finalized', 'drafts', 'unclaimed'))
 
     return changed, data
+
 
 # ======================================================================
 
 
-def check_course_updates(
-        slack_client, channel,
-        course_period, course, assignments, cached=None):
+def check_course_updates(slack_client,
+                         channel,
+                         course_period,
+                         course,
+                         assignments,
+                         cached=None):
     """Checks the codePost course for updates, comparing to the cached
     data. Returns the new data to store for this course, and a list of
     errors.
@@ -282,9 +292,9 @@ def check_course_updates(
             print('not in the proper date range')
             continue
         if assignment_name not in course_assignments:
-            errors.append(_error(
-                'Course "{}" does not have an assignment called "{}"',
-                course_period, assignment_name))
+            errors.append(
+                _error('Course "{}" does not have an assignment called "{}"',
+                       course_period, assignment_name))
             continue
         assignment = course_assignments[assignment_name]
         assignment_cache = cached.get(assignment_name, None)
@@ -310,17 +320,19 @@ def check_course_updates(
             done = finalized / total
 
         update_msg = _build_notification_msg(
-            assignment=assignment_name, done=done,
-            finalized=finalized, drafts=drafts, unclaimed=unclaimed,
-            graders_finalized=graders_finalized
-        )
+            assignment=assignment_name,
+            done=done,
+            finalized=finalized,
+            drafts=drafts,
+            unclaimed=unclaimed,
+            graders_finalized=graders_finalized)
         # the response doesn't matter
-        _, error = send_slack_msg(
-            slack_client, channel, update_msg)
+        _, error = send_slack_msg(slack_client, channel, update_msg)
         if error is not None:
             errors.append(_error('Slack API error: {}', error))
 
     return data, changed, errors
+
 
 # ======================================================================
 
@@ -336,12 +348,12 @@ def process_courses(slack_client, config, channels, cached):
 
     for course_period, course_info in config.items():
         print('processing course:', course_period)
-        courses = codepost.course.list_available(
-            name=course_info['course'], period=course_info['period'])
+        courses = codepost.course.list_available(name=course_info['course'],
+                                                 period=course_info['period'])
         if len(courses) == 0:
-            errors.append(_error(
-                'Course "{}" with period "{}" could not be found',
-                course_info['course'], course_info['period']))
+            errors.append(
+                _error('Course "{}" with period "{}" could not be found',
+                       course_info['course'], course_info['period']))
             continue
         # take the first course if there are duplicates
         course = courses[0]
@@ -360,6 +372,7 @@ def process_courses(slack_client, config, channels, cached):
         changed = changed or course_changed
 
     return data, changed, errors
+
 
 # ======================================================================
 
@@ -404,6 +417,7 @@ def write_data(crypto, data):
         data_bytes = data_str.encode(encoding='utf-8')
         filepath.write_bytes(crypto.encrypt(data_bytes))
 
+
 # ======================================================================
 
 
@@ -415,41 +429,39 @@ def read_slack_channels_file(slack_client):
     errors = []
 
     if not SLACK_CHANNELS_FILE.exists():
-        errors.append(_error(
-            'Slack channels file "{}" does not exist',
-            SLACK_CHANNELS_FILE))
+        errors.append(
+            _error('Slack channels file "{}" does not exist',
+                   SLACK_CHANNELS_FILE))
         return None, errors
 
-    channels = yaml.safe_load(
-        SLACK_CHANNELS_FILE.read_text(encoding='utf-8'))
+    channels = yaml.safe_load(SLACK_CHANNELS_FILE.read_text(encoding='utf-8'))
 
     # validate channels
     if not isinstance(channels, dict):
-        errors.append(_error(
-            'Slack channels file has an invalid format'))
+        errors.append(_error('Slack channels file has an invalid format'))
         return None, errors
 
     for channel, channel_id in channels.items():
         if not isinstance(channel_id, str):
-            errors.append(_error(
-                'Slack channels file has an invalid channel id for '
-                'channel "{}" (expected str)',
-                channel))
+            errors.append(
+                _error(
+                    'Slack channels file has an invalid channel id for '
+                    'channel "{}" (expected str)', channel))
             continue
         try:
             slack_client.chat_scheduledMessages_list(channel=channel_id)
         except SlackApiError as e:
             # e.response should be:
             # {"ok": False, "error": "invalid_channel"}
-            if (e.response and
-                not e.response.get('ok', False) and
+            if (e.response and not e.response.get('ok', False) and
                     e.response.get('error', None) == 'invalid_channel'):
-                errors.append(_error(
-                    'Invalid id for Slack channel "{}"', channel))
+                errors.append(
+                    _error('Invalid id for Slack channel "{}"', channel))
             else:
                 raise
 
     return channels, errors
+
 
 # ======================================================================
 
@@ -471,8 +483,7 @@ def _validate_config_course(index, config_course):
     """
 
     _invalid_msg = (
-        f'Config file has an invalid course format at index {index}'
-    )
+        f'Config file has an invalid course format at index {index}')
 
     def invalid(msg=None):
         if msg is None:
@@ -505,9 +516,7 @@ def _validate_config_course(index, config_course):
             return invalid(_invalid_assignment_msg)
 
         assignment = {}
-        for key, required in (
-            ('name', True), ('start', False), ('end', False)
-        ):
+        for key, required in (('name', True), ('start', False), ('end', False)):
             if key not in config_assignment:
                 if not required:
                     assignment[key] = None
@@ -524,8 +533,8 @@ def _validate_config_course(index, config_course):
             try:
                 date = datetime.strptime(date_str.strip(), DATE_FMT)
             except ValueError:
-                return invalid(
-                    _invalid_assignment_msg + ': invalid date format')
+                return invalid(_invalid_assignment_msg +
+                               ': invalid date format')
             date += delta
             # convert to eastern, then to utc
             date_utc = EASTERN_TZ.localize(date).astimezone(UTC_TZ)
@@ -550,8 +559,7 @@ def read_config_file(channels):
     errors = []
 
     if not CONFIG_FILE.exists():
-        errors.append(_error(
-            'Config file "{}" does not exist', CONFIG_FILE))
+        errors.append(_error('Config file "{}" does not exist', CONFIG_FILE))
         return None, errors
 
     config = yaml.safe_load(CONFIG_FILE.read_text(encoding='utf-8'))
@@ -570,18 +578,19 @@ def read_config_file(channels):
             continue
         course_period = course['course'] + ' ' + course['period']
         if course_period in courses:
-            errors.append(_error(
-                'Config file has a repeating course name and period'))
+            errors.append(
+                _error('Config file has a repeating course name and period'))
             continue
         if course['channel'] not in channels:
-            errors.append(_error(
-                'Config file has unknown channel name "{}" '
-                'for course "{}"',
-                course['channel'], course_period))
+            errors.append(
+                _error(
+                    'Config file has unknown channel name "{}" '
+                    'for course "{}"', course['channel'], course_period))
             continue
         courses[course_period] = course
 
     return courses, errors
+
 
 # ======================================================================
 
@@ -593,9 +602,8 @@ def save_errors(errors):
     else:
         ERROR_LOGS_FILE.parent.mkdir(parents=True, exist_ok=True)
         existing_errors = ''
-    ERROR_LOGS_FILE.write_text(
-        existing_errors + '\n'.join(errors) + '\n',
-        encoding='utf-8')
+    ERROR_LOGS_FILE.write_text(existing_errors + '\n'.join(errors) + '\n',
+                               encoding='utf-8')
 
 
 def main():
@@ -606,9 +614,8 @@ def main():
     for name in ('CODEPOST_API_KEY', 'SLACK_TOKEN', 'DECRYPTION_KEY'):
         secret = os.environ.get(name, None)
         if secret is None or secret == '':
-            errors.append(_error(
-                'Environment variable for "{}" could not be found',
-                name))
+            errors.append(
+                _error('Environment variable "{}" could not be found', name))
         else:
             secrets[name] = secret
 
@@ -617,8 +624,7 @@ def main():
         return
 
     # configure the codePost key
-    if not codepost.util.config.validate_api_key(
-            secrets['CODEPOST_API_KEY']):
+    if not codepost.util.config.validate_api_key(secrets['CODEPOST_API_KEY']):
         errors.append(_error('codePost API key is invalid'))
     else:
         codepost.configure_api_key(secrets['CODEPOST_API_KEY'])
@@ -630,8 +636,7 @@ def main():
         slack_client.chat_scheduledMessages_list()
     except SlackApiError as e:
         # e.response should be: {"ok": False, "error": "invalid_auth"}
-        if (e.response and
-            not e.response.get('ok', False) and
+        if (e.response and not e.response.get('ok', False) and
                 e.response.get('error', None) == 'invalid_auth'):
             errors.append(_error('Slack API token is invalid'))
         else:
@@ -660,8 +665,8 @@ def main():
         save_errors(errors)
         return
 
-    data, changed, errors = process_courses(
-        slack_client, config, channels, cached_data)
+    data, changed, errors = process_courses(slack_client, config, channels,
+                                            cached_data)
     if len(errors) > 0:
         save_errors(errors)
 
