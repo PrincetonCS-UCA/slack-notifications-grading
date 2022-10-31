@@ -5,9 +5,7 @@ verify_ssl = true
 
 [packages]
 codepost = "*"
-python-dateutil = "*"
 pytz = "*"
-requests = "*"
 slackclient = "*"
 pyyaml = "*"
 cryptography = "*"
