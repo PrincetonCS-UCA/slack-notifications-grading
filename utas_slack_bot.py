@@ -426,12 +426,21 @@ def _validate_slack_channels(slack_client, channels):
         try:
             slack_client.chat_scheduledMessages_list(channel=channel_id)
         except SlackApiError as e:
-            # e.response should be:
-            # {"ok": False, "error": "invalid_channel"}
-            if (e.response and not e.response.get('ok', False) and
-                    e.response.get('error', None) == 'invalid_channel'):
+            if not e.response:
+                raise
+            # assume e.response['ok'] = False
+            reason = e.response.get('error', None)
+            if reason is None:
+                raise
+            if reason == 'invalid_channel':
+                # invalid channel id: {"ok": False, "error": "invalid_channel"}
                 errors.append(
                     _error('Invalid id for Slack channel "{}"', channel))
+            elif reason == 'not_in_channel':
+                # not in channel: {"ok": False, "error": "not_in_channel"}
+                errors.append(
+                    _error('Slack key does not have access to channel "{}"',
+                           channel))
             else:
                 raise
     return errors
