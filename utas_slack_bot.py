@@ -4,7 +4,7 @@ This script sends update notifications to the UTAs slack on the progress
 of grading from codePost.
 """
 
-# ======================================================================
+# ==============================================================================
 
 import json
 import os
@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from slack import WebClient
 from slack.errors import SlackApiError
 
-# ======================================================================
+# ==============================================================================
 
 # The cached data is separated into one folder for each course,
 # then one file for each time the course's data is updated
@@ -27,7 +27,6 @@ CACHED_DATA_FOLDER = Path('./data')
 ERROR_LOGS_FILE = CACHED_DATA_FOLDER / '_ERRORS.txt'
 
 CONFIG_FILE = Path('config.yaml')
-SLACK_CHANNELS_FILE = Path('channels.yaml')
 
 # yapf: disable
 UPDATE_MESSAGE_TEMPLATE = (
@@ -40,7 +39,7 @@ GRADERS_RECENTLY_FINALIZED_TEMPLATE = (
 )
 # yapf: enable
 
-# ======================================================================
+# ==============================================================================
 
 UTC_TZ = pytz.utc
 EASTERN_TZ = pytz.timezone('US/Eastern')
@@ -49,7 +48,7 @@ DATE_FMT = '%Y-%m-%d'
 NO_DAY = timedelta()
 ONE_DAY = timedelta(days=1)
 
-# ======================================================================
+# ==============================================================================
 
 
 def now_dt():
@@ -78,7 +77,7 @@ def _error(msg, *args, **kwargs):
     return f'[{now()}] {formatted}'
 
 
-# ======================================================================
+# ==============================================================================
 
 
 def _build_notification_msg(**kwargs):
@@ -97,7 +96,7 @@ def _build_notification_msg(**kwargs):
     return msg
 
 
-# ======================================================================
+# ==============================================================================
 
 
 def send_slack_msg(slack_client, channel_id, msg, as_block=False):
@@ -136,7 +135,7 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
     return response, error
 
 
-# ======================================================================
+# ==============================================================================
 
 
 def check_assignment_updates(assignment, cached=None):
@@ -263,7 +262,7 @@ def check_assignment_updates(assignment, cached=None):
     return changed, data
 
 
-# ======================================================================
+# ==============================================================================
 
 
 def check_course_updates(slack_client,
@@ -334,7 +333,7 @@ def check_course_updates(slack_client,
     return data, changed, errors
 
 
-# ======================================================================
+# ==============================================================================
 
 
 def process_courses(slack_client, config, channels, cached):
@@ -374,7 +373,7 @@ def process_courses(slack_client, config, channels, cached):
     return data, changed, errors
 
 
-# ======================================================================
+# ==============================================================================
 
 
 def read_cached_data(crypto, courses):
@@ -418,36 +417,12 @@ def write_data(crypto, data):
         filepath.write_bytes(crypto.encrypt(data_bytes))
 
 
-# ======================================================================
+# ==============================================================================
 
 
-def read_slack_channels_file(slack_client):
-    """Reads the Slack channels file.
-    Validates all the channel ids.
-    Returns the dict of channels, and a list of errors.
-    """
+def _validate_slack_channels(slack_client, channels):
     errors = []
-
-    if not SLACK_CHANNELS_FILE.exists():
-        errors.append(
-            _error('Slack channels file "{}" does not exist',
-                   SLACK_CHANNELS_FILE))
-        return None, errors
-
-    channels = yaml.safe_load(SLACK_CHANNELS_FILE.read_text(encoding='utf-8'))
-
-    # validate channels
-    if not isinstance(channels, dict):
-        errors.append(_error('Slack channels file has an invalid format'))
-        return None, errors
-
     for channel, channel_id in channels.items():
-        if not isinstance(channel_id, str):
-            errors.append(
-                _error(
-                    'Slack channels file has an invalid channel id for '
-                    'channel "{}" (expected str)', channel))
-            continue
         try:
             slack_client.chat_scheduledMessages_list(channel=channel_id)
         except SlackApiError as e:
@@ -459,11 +434,7 @@ def read_slack_channels_file(slack_client):
                     _error('Invalid id for Slack channel "{}"', channel))
             else:
                 raise
-
-    return channels, errors
-
-
-# ======================================================================
+    return errors
 
 
 def _valid_date_range(start, end):
@@ -550,26 +521,49 @@ def _validate_config_course(index, config_course):
     return None, course
 
 
-def read_config_file(channels):
+def read_config_file(slack_client):
     """Reads the config file.
-    Fails on missing required keys, unexpected types, repeated course
-    name and period pairs, and unknown channel names.
-    Returns the list of courses, and a list of errors.
+    Fails on invalid channel ids, missing required keys, unexpected types,
+    repeated course name and period pairs, and unknown channel names.
+    Returns the mapping of channels, the list of courses, and a list of errors.
     """
     errors = []
 
+    INVALID_RETURN = None, None, errors
+
     if not CONFIG_FILE.exists():
         errors.append(_error('Config file "{}" does not exist', CONFIG_FILE))
-        return None, errors
+        return INVALID_RETURN
 
     config = yaml.safe_load(CONFIG_FILE.read_text(encoding='utf-8'))
 
-    # validate config
-    if (not isinstance(config, dict) or
-            not isinstance(config.get('sources', None), list)):
+    # validate highest-level types
+    if not isinstance(config, dict):
         errors.append(_error('Config file has an invalid format'))
-        return None, errors
+        return INVALID_RETURN
+    for value, expected in (
+        (config.get('channels', None), dict),
+        (config.get('sources', None), list),
+    ):
+        if not isinstance(value, expected):
+            errors.append(_error('Config file has an invalid format'))
+            return INVALID_RETURN
 
+    # read channels
+    channels = {}
+    for channel, channel_id in config['channels'].items():
+        if not isinstance(channel_id, str):
+            errors.append(
+                _error(
+                    'Slack channels file has an invalid channel id for '
+                    'channel "{}" (expected str)', channel))
+            continue
+        channels[channel] = channel_id
+    errors += _validate_slack_channels(slack_client, channels)
+    if len(errors) > 0:
+        return INVALID_RETURN
+
+    # read sources
     courses = {}
     for i, config_course in enumerate(config['sources']):
         invalid_msg, course = _validate_config_course(i, config_course)
@@ -588,11 +582,13 @@ def read_config_file(channels):
                     'for course "{}"', course['channel'], course_period))
             continue
         courses[course_period] = course
+    if len(errors) > 0:
+        return INVALID_RETURN
 
-    return courses, errors
+    return channels, courses, errors
 
 
-# ======================================================================
+# ==============================================================================
 
 
 def save_errors(errors):
@@ -646,12 +642,7 @@ def main():
         save_errors(errors)
         return
 
-    channels, errors = read_slack_channels_file(slack_client)
-    if len(errors) > 0:
-        save_errors(errors)
-        return
-
-    config, errors = read_config_file(channels)
+    channels, config, errors = read_config_file(slack_client)
     if len(errors) > 0:
         save_errors(errors)
         return

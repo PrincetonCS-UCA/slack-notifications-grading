@@ -15,6 +15,11 @@ submissions, etc.), and to trigger a Slack notification if changes were found.
 
   <!-- prettier-ignore -->
   ```yaml
+  # The slack channel ids
+  channels:
+    "#126-grading-notifications": "ABC123"
+
+  # The courses and assignments to send notifications for
   sources:
     - course: "COS126"
       period: "F2022"
