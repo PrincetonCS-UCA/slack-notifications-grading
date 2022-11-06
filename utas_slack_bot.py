@@ -56,18 +56,13 @@ def now_dt():
     return UTC_TZ.localize(datetime.utcnow())
 
 
-def now(filename=False):
+def now():
     """Returns the current time in UTC as a string.
 
-    Since UTC does not observe daylight savings, this means that each
-    call to this function (with `filename`=False) should theoretically
-    return something different.
+    Since UTC does not observe daylight savings, this means that each call to
+    this function should theoretically return something different.
     """
-    if filename:
-        fmt = '%Y-%m-%d %H%M%S'
-    else:
-        fmt = '%Y-%m-%d %H:%M:%S.%f'
-    return now_dt().strftime(fmt)
+    return now_dt().strftime('%Y-%m-%d %H:%M:%S.%f')
 
 
 def _error(msg, *args, **kwargs):
@@ -100,11 +95,11 @@ def _build_notification_msg(**kwargs):
 
 
 def send_slack_msg(slack_client, channel_id, msg, as_block=False):
-    """Sends a message on Slack to the specified channel. If `as_block`
-    is True, the message is sent as a markdown block.
+    """Sends a message on Slack to the specified channel. If `as_block` is True,
+    the message is sent as a markdown block.
 
-    Returns the request response, and the error response or None if
-    there was no error.
+    Returns the request response, and the error response or None if there was no
+    error.
     """
 
     print('sending message to channel:', channel_id)
@@ -138,24 +133,34 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
 # ==============================================================================
 
 
-def check_assignment_updates(assignment, cached=None):
-    """Checks the codePost assignment for updates, comparing to the
-    cached data. Returns whether there were updates and the new data to
-    store for this assignment.
+def check_assignment_updates(assignment, timestamp_key, cached=None):
+    """Checks the codePost assignment for updates, comparing to the cached data.
+    Returns whether there were updates and the new data to store for this
+    assignment.
     """
 
-    num_total = 0
-    num_finalized = 0
-    num_drafts = 0
-    num_unclaimed = 0
+    def max_int_num(nums, **kwargs):
+        """Returns the maximum number of string numbers."""
+        args = {}
+        if 'default' in kwargs:
+            args['default'] = kwargs['default']
+        return max(nums, key=lambda a: (len(a), tuple(a)), **args)
+
     # maps: submission id -> timestamp ->
     #   status of "unclaimed", "draft", "finalized", or "deleted"
-    if cached is not None and 'submissions' in cached:
+    if cached is not None:
         submissions = cached['submissions']
+        runs = cached['runs']
+        index = int(max_int_num(runs.keys(), default=0)) + 1
         deleted = set(submissions.keys())
     else:
         submissions = {}
+        runs = {}
+        index = 1
         deleted = set()
+    index = str(index)
+
+    updated_status = False
 
     def get_last_status(submission_id):
         """Returns the last status of the given submission."""
@@ -166,25 +171,24 @@ def check_assignment_updates(assignment, cached=None):
         if len(submission_data) == 0:
             return NO_STATUS
 
-        max_key = max(submission_data.keys())
+        max_key = max_int_num(submission_data.keys())
         return submission_data[max_key]
 
     def save_status(submission_id, status):
         """Writes the new status for the given submission."""
+        nonlocal updated_status
         if submission_id not in submissions:
             submissions[submission_id] = {}
         submission_data = submissions[submission_id]
+        submission_data[index] = status
+        # when this is called, it is for sure a different status, so we can
+        # conclude that the status has been updated
+        updated_status = True
 
-        timestamp = now()
-        if timestamp in submission_data:
-            # impossible, but don't want to overwrite data
-            i = 1
-            new_timestamp = f'{timestamp} {i}'
-            while new_timestamp in submission_data:
-                i += 1
-                new_timestamp = f'{timestamp} {i}'
-            timestamp = new_timestamp
-        submission_data[timestamp] = status
+    num_total = 0
+    num_finalized = 0
+    num_drafts = 0
+    num_unclaimed = 0
 
     # the graders who finalized between the cached and the current state
     graders_finalized = set()
@@ -240,16 +244,22 @@ def check_assignment_updates(assignment, cached=None):
 
         save_status(submission_id, current_status)
 
+    if updated_status:
+        runs[index] = timestamp_key
+
     data = {
         'total': num_total,
         'finalized': num_finalized,
         'drafts': num_drafts,
         'unclaimed': num_unclaimed,
+        'runs': runs,
         'submissions': submissions,
         'graders_finalized': graders_finalized,
     }
 
-    if num_total == 0 or num_finalized == 0:
+    if updated_status:
+        changed = True
+    elif num_total == 0 or num_finalized == 0:
         changed = False
     elif cached is None:
         # first time getting data
@@ -271,9 +281,8 @@ def check_course_updates(slack_client,
                          course,
                          assignments,
                          cached=None):
-    """Checks the codePost course for updates, comparing to the cached
-    data. Returns the new data to store for this course, and a list of
-    errors.
+    """Checks the codePost course for updates, comparing to the cached data.
+    Returns the new data to store for this course, and a list of errors.
     """
     if cached is None:
         cached = {}
@@ -298,8 +307,9 @@ def check_course_updates(slack_client,
         assignment = course_assignments[assignment_name]
         assignment_cache = cached.get(assignment_name, None)
 
+        timestamp_key = now()
         assignment_changed, assignment_data = check_assignment_updates(
-            assignment, assignment_cache)
+            assignment, timestamp_key, assignment_cache)
         graders_finalized = assignment_data.pop('graders_finalized')
         data[assignment_name] = assignment_data
 
@@ -337,9 +347,9 @@ def check_course_updates(slack_client,
 
 
 def process_courses(slack_client, config, channels, cached):
-    """Processes the assignments in the given courses and sends
-    notifications to the specified Slack channel. Returns the new data
-    to store, and a list of errors.
+    """Processes the assignments in the given courses and sends notifications to
+    the specified Slack channel. Returns the new data to store, and a list of
+    errors.
     """
     data = cached
     changed = False
@@ -458,8 +468,8 @@ def _valid_date_range(start, end):
 
 def _validate_config_course(index, config_course):
     """Validates a course config dict.
-    Returns a message and None if the course is invalid; otherwise,
-    returns None and the course dict.
+    Returns a message and None if the course is invalid;
+    otherwise, returns None and the course dict.
     """
 
     _invalid_msg = (
