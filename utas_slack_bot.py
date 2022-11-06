@@ -278,7 +278,7 @@ def check_course_updates(slack_client,
     if cached is None:
         cached = {}
 
-    data = {}
+    data = cached
     changed = False
     errors = []
 
@@ -341,7 +341,7 @@ def process_courses(slack_client, config, channels, cached):
     notifications to the specified Slack channel. Returns the new data
     to store, and a list of errors.
     """
-    data = {}
+    data = cached
     changed = False
     errors = []
 
