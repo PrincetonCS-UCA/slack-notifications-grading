@@ -8,25 +8,21 @@ of grading from codePost.
 
 import json
 import os
-from datetime import datetime, timedelta
 from pathlib import Path
 
 import codepost
-import pytz
-import yaml
 from cryptography.fernet import Fernet, InvalidToken
-from slack import WebClient
 from slack.errors import SlackApiError
+
+import read_config
+from utils import _error, get_slack_client, now, validate_codepost
 
 # ==============================================================================
 
-# The cached data is separated into one folder for each course,
-# then one file for each time the course's data is updated
+# The cached data is separated into one encrypted txt file for each course
 CACHED_DATA_FOLDER = Path('./data')
 
 ERROR_LOGS_FILE = CACHED_DATA_FOLDER / '_ERRORS.txt'
-
-CONFIG_FILE = Path('config.yaml')
 
 # yapf: disable
 UPDATE_MESSAGE_TEMPLATE = (
@@ -38,39 +34,6 @@ GRADERS_RECENTLY_FINALIZED_TEMPLATE = (
     'Graders who recently finalized: {graders}'
 )
 # yapf: enable
-
-# ==============================================================================
-
-UTC_TZ = pytz.utc
-EASTERN_TZ = pytz.timezone('US/Eastern')
-DATE_FMT = '%Y-%m-%d'
-
-NO_DAY = timedelta()
-ONE_DAY = timedelta(days=1)
-
-# ==============================================================================
-
-
-def now_dt():
-    """Returns the current datetime in UTC."""
-    return UTC_TZ.localize(datetime.utcnow())
-
-
-def now():
-    """Returns the current time in UTC as a string.
-
-    Since UTC does not observe daylight savings, this means that each call to
-    this function should theoretically return something different.
-    """
-    return now_dt().strftime('%Y-%m-%d %H:%M:%S.%f')
-
-
-def _error(msg, *args, **kwargs):
-    """Returns the formatted message with the current timestamp."""
-    formatted = msg.format(*args, **kwargs)
-    print('Error:', formatted)
-    return f'[{now()}] {formatted}'
-
 
 # ==============================================================================
 
@@ -436,186 +399,6 @@ def write_data(crypto, data):
 # ==============================================================================
 
 
-def _validate_slack_channels(slack_client, channels):
-    errors = []
-    for channel, channel_id in channels.items():
-        try:
-            slack_client.chat_scheduledMessages_list(channel=channel_id)
-        except SlackApiError as e:
-            if not e.response:
-                raise
-            # assume e.response['ok'] = False
-            reason = e.response.get('error', None)
-            if reason is None:
-                raise
-            if reason == 'invalid_channel':
-                # invalid channel id: {"ok": False, "error": "invalid_channel"}
-                errors.append(
-                    _error('Invalid id for Slack channel "{}"', channel))
-            elif reason == 'not_in_channel':
-                # not in channel: {"ok": False, "error": "not_in_channel"}
-                errors.append(
-                    _error('Slack key does not have access to channel "{}"',
-                           channel))
-            else:
-                raise
-    return errors
-
-
-def _valid_date_range(start, end):
-    if start is None and end is None:
-        return True
-    if start is None:
-        return now_dt() < end
-    if end is None:
-        return start <= now_dt()
-    return start <= now_dt() < end
-
-
-def _validate_config_course(index, config_course):
-    """Validates a course config dict.
-    Returns a message and None if the course is invalid;
-    otherwise, returns None and the course dict.
-    """
-
-    _invalid_msg = (
-        f'Config file has an invalid course format at index {index}')
-
-    def invalid(msg=None):
-        if msg is None:
-            msg = _invalid_msg
-        return msg, None
-
-    if not isinstance(config_course, dict):
-        return invalid()
-
-    course = {}
-
-    # must be strs
-    for key in ('course', 'period', 'channel'):
-        if key not in config_course:
-            return invalid()
-        if not isinstance(config_course[key], str):
-            return invalid()
-        course[key] = config_course[key]
-
-    if 'assignments' not in config_course:
-        return invalid()
-    if not isinstance(config_course['assignments'], list):
-        return invalid()
-
-    assignments = []
-    for j, config_assignment in enumerate(config_course['assignments']):
-        _invalid_assignment_msg = \
-            _invalid_msg + f', assignment index {j}'
-        if not isinstance(config_assignment, dict):
-            return invalid(_invalid_assignment_msg)
-
-        assignment = {}
-        for key, required in (('name', True), ('start', False), ('end', False)):
-            if key not in config_assignment:
-                if not required:
-                    assignment[key] = None
-                    continue
-                return invalid(_invalid_assignment_msg)
-            if not isinstance(config_assignment[key], str):
-                return invalid(_invalid_assignment_msg)
-            assignment[key] = config_assignment[key]
-
-        for key, delta in zip(('start', 'end'), (NO_DAY, ONE_DAY)):
-            date_str = assignment[key]
-            if date_str is None:
-                continue
-            try:
-                date = datetime.strptime(date_str.strip(), DATE_FMT)
-            except ValueError:
-                return invalid(_invalid_assignment_msg +
-                               ': invalid date format')
-            date += delta
-            # convert to eastern, then to utc
-            date_utc = EASTERN_TZ.localize(date).astimezone(UTC_TZ)
-            assignment[key] = date_utc
-
-        assignment['valid_date_range'] = \
-            _valid_date_range(assignment['start'], assignment['end'])
-
-        assignments.append(assignment)
-
-    course['assignments'] = assignments
-
-    return None, course
-
-
-def read_config_file(slack_client):
-    """Reads the config file.
-    Fails on invalid channel ids, missing required keys, unexpected types,
-    repeated course name and period pairs, and unknown channel names.
-    Returns the mapping of channels, the list of courses, and a list of errors.
-    """
-    errors = []
-
-    INVALID_RETURN = None, None, errors
-
-    if not CONFIG_FILE.exists():
-        errors.append(_error('Config file "{}" does not exist', CONFIG_FILE))
-        return INVALID_RETURN
-
-    config = yaml.safe_load(CONFIG_FILE.read_text(encoding='utf-8'))
-
-    # validate highest-level types
-    if not isinstance(config, dict):
-        errors.append(_error('Config file has an invalid format'))
-        return INVALID_RETURN
-    for value, expected in (
-        (config.get('channels', None), dict),
-        (config.get('sources', None), list),
-    ):
-        if not isinstance(value, expected):
-            errors.append(_error('Config file has an invalid format'))
-            return INVALID_RETURN
-
-    # read channels
-    channels = {}
-    for channel, channel_id in config['channels'].items():
-        if not isinstance(channel_id, str):
-            errors.append(
-                _error(
-                    'Slack channels file has an invalid channel id for '
-                    'channel "{}" (expected str)', channel))
-            continue
-        channels[channel] = channel_id
-    errors += _validate_slack_channels(slack_client, channels)
-    if len(errors) > 0:
-        return INVALID_RETURN
-
-    # read sources
-    courses = {}
-    for i, config_course in enumerate(config['sources']):
-        invalid_msg, course = _validate_config_course(i, config_course)
-        if invalid_msg is not None:
-            errors.append(_error(invalid_msg))
-            continue
-        course_period = course['course'] + ' ' + course['period']
-        if course_period in courses:
-            errors.append(
-                _error('Config file has a repeating course name and period'))
-            continue
-        if course['channel'] not in channels:
-            errors.append(
-                _error(
-                    'Config file has unknown channel name "{}" '
-                    'for course "{}"', course['channel'], course_period))
-            continue
-        courses[course_period] = course
-    if len(errors) > 0:
-        return INVALID_RETURN
-
-    return channels, courses, errors
-
-
-# ==============================================================================
-
-
 def save_errors(errors):
     """Appends the given errors to the errors file."""
     if ERROR_LOGS_FILE.exists():
@@ -644,30 +427,19 @@ def main():
         save_errors(errors)
         return
 
-    # configure the codePost key
-    if not codepost.util.config.validate_api_key(secrets['CODEPOST_API_KEY']):
+    success = validate_codepost(secrets['CODEPOST_API_KEY'])
+    if not success:
         errors.append(_error('codePost API key is invalid'))
-    else:
-        codepost.configure_api_key(secrets['CODEPOST_API_KEY'])
 
-    # configure the slack token
-    slack_client = WebClient(token=secrets['SLACK_TOKEN'])
-    try:
-        # validate the token using some random GET request
-        slack_client.chat_scheduledMessages_list()
-    except SlackApiError as e:
-        # e.response should be: {"ok": False, "error": "invalid_auth"}
-        if (e.response and not e.response.get('ok', False) and
-                e.response.get('error', None) == 'invalid_auth'):
-            errors.append(_error('Slack API token is invalid'))
-        else:
-            raise
+    success, slack_client = get_slack_client(secrets['SLACK_TOKEN'])
+    if not success:
+        errors.append(_error('Slack API token is invalid'))
 
     if len(errors) > 0:
         save_errors(errors)
         return
 
-    channels, config, errors = read_config_file(slack_client)
+    channels, config, errors = read_config.read(slack_client)
     if len(errors) > 0:
         save_errors(errors)
         return

@@ -1,0 +1,50 @@
+on:
+  push:
+    paths: ['config.yaml']
+  pull_request:
+    paths: ['config.yaml']
+
+name: Validate `config.yaml`
+jobs:
+  validate:
+    name: Validate `config.yaml`
+    runs-on: ubuntu-latest
+    permissions: read-all
+    env:
+      PIPENV_VENV_IN_PROJECT: 'enabled'
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      # Setup Python (faster than using Python container)
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Install pipenv
+        run: |
+          python -m pip install --upgrade pipenv wheel
+
+      - name: Check pipenv cache before installing dependencies
+        id: cache-dependencies
+        uses: actions/cache@v3
+        with:
+          path: ./.venv # since we know that .venv is gonna be created in the current working directory
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/Pipfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pipenv
+
+      - name: Install requirements
+        if: steps.cache-dependencies.outputs.cache-hit != 'true'
+        run: |
+          touch Pipfile
+          pipenv install --deploy --dev --verbose
+
+      - name: Run validation
+        env:
+          CODEPOST_API_KEY: ${{ secrets.CODEPOST_API_KEY }}
+          SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+        run: |
+          pipenv run python ./read_config.py
