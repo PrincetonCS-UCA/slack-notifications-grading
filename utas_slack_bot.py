@@ -314,7 +314,7 @@ def process_courses(slack_client, config, channels, cached):
     the specified Slack channel. Returns the new data to store, and a list of
     errors.
     """
-    data = cached
+    data = {}
     changed = False
     errors = []
 
@@ -340,8 +340,9 @@ def process_courses(slack_client, config, channels, cached):
                 course_cache)
         if len(course_errors) > 0:
             errors += course_errors
-        data[course_period] = course_data
-        changed = changed or course_changed
+        if course_changed:
+            changed = True
+            data[course_period] = course_data
 
     return data, changed, errors
 
