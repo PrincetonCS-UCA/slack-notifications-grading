@@ -386,6 +386,12 @@ def process_courses(slack_client, config, channels, cached):
 # ==============================================================================
 
 
+def _get_course_filepath(course_period):
+    # very minimal attempt to slugify: remove spaces
+    filename = course_period.replace(' ', '_') + '.txt'
+    return CACHED_DATA_FOLDER / filename
+
+
 def read_cached_data(crypto, courses):
     """Reads the unencrypted cached data for the given courses."""
 
@@ -395,7 +401,7 @@ def read_cached_data(crypto, courses):
         return data, []
 
     for course_period in courses.keys():
-        filepath = CACHED_DATA_FOLDER / (course_period + '.txt')
+        filepath = _get_course_filepath(course_period)
         if not filepath.exists():
             continue
 
@@ -403,8 +409,8 @@ def read_cached_data(crypto, courses):
         try:
             decoded_data_bytes = crypto.decrypt(encoded_data_bytes)
         except InvalidToken:
-            # fail immediately: assume the same key was used for all the
-            # saved data
+            # fail immediately: assume the same key was used for all the saved
+            # data
             errors = [_error('Invalid decryption key for stored data')]
             return None, errors
 
@@ -421,7 +427,7 @@ def write_data(crypto, data):
     CACHED_DATA_FOLDER.mkdir(parents=True, exist_ok=True)
 
     for course_period, course_data in data.items():
-        filepath = CACHED_DATA_FOLDER / (course_period + '.txt')
+        filepath = _get_course_filepath(course_period)
         data_str = json.dumps(course_data)
         data_bytes = data_str.encode(encoding='utf-8')
         filepath.write_bytes(crypto.encrypt(data_bytes))
