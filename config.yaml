@@ -27,7 +27,7 @@ sources:
       - name: 'Classifier'
         start: '2022-11-02'
         end: '2022-11-08'
-      - name: 'GuitarHero'
+      - name: 'Guitar'
         start: '2022-11-09'
         end: '2022-11-15'
   - course: 'COS226'
