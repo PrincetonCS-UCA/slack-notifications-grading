@@ -447,7 +447,11 @@ def main():
 
     # TODO: allow changing the key with `MultiFernet`
     # https://cryptography.io/en/latest/fernet/#cryptography.fernet.MultiFernet.rotate
-    crypto = Fernet(secrets['DECRYPTION_KEY'])
+    try:
+        crypto = Fernet(secrets['DECRYPTION_KEY'])
+    except ValueError:
+        save_errors([_error('Invalid decryption key for stored data')])
+        return
 
     cached_data, errors = read_cached_data(crypto, config)
     if len(errors) > 0:

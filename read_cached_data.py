@@ -42,12 +42,11 @@ def main():
         print('Cannot find decryption key')
         return
 
-    crypto = Fernet(decryption_key)
-
     encoded_data_bytes = filepath.read_bytes()
     try:
+        crypto = Fernet(decryption_key)
         decoded_data_bytes = crypto.decrypt(encoded_data_bytes)
-    except InvalidToken:
+    except (ValueError, InvalidToken):
         print('Error: Invalid decryption key used for stored data')
         return
 
