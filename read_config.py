@@ -15,7 +15,7 @@ from pathlib import Path
 import codepost
 import pytz
 import yaml
-from slack.errors import SlackApiError
+from slack_sdk.errors import SlackApiError
 
 from utils import _error, get_slack_client, now_dt, validate_codepost
 
@@ -43,9 +43,8 @@ def _validate_slack_channels(slack_client, channels, fmt_error):
         try:
             slack_client.chat_scheduledMessages_list(channel=channel_id)
         except SlackApiError as e:
-            if not e.response:
+            if not e.response or e.reponse.get('ok', None) is not False:
                 raise
-            # assume e.response['ok'] = False
             reason = e.response.get('error', None)
             if reason is None:
                 raise
