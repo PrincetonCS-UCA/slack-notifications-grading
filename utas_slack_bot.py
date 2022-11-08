@@ -412,6 +412,8 @@ def save_errors(errors):
 
 
 def main():
+    print('Current time:', now())
+
     errors = []
 
     # read environment variables
