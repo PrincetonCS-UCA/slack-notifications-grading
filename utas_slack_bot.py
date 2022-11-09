@@ -220,12 +220,14 @@ def check_assignment_updates(assignment, timestamp_key, cached=None):
         'graders_finalized': graders_finalized,
     }
 
-    if updated_status:
-        changed = True
-    elif num_total == 0 or num_finalized == 0:
+    if num_total == 0 or num_finalized == 0:
+        # no submissions uploaded or no submissions finalized: no need to send
+        # notification
         changed = False
     elif cached is None:
         # first time getting data
+        changed = True
+    elif updated_status:
         changed = True
     else:
         changed = any(
