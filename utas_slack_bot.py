@@ -38,6 +38,27 @@ GRADERS_RECENTLY_FINALIZED_TEMPLATE = (
 # ==============================================================================
 
 
+def _build_deadline_msg(messages, assignment_info):
+    """Builds a deadline message.
+    Returns the message and None, or None and an error message if there was an
+    error.
+    """
+    assignment_name = assignment_info['name']
+    deadline_fmt = messages.get('deadline', None)
+    if deadline_fmt is None:
+        return None, _error(
+            'Assignment "{}" has a deadline, but no deadline message was given',
+            assignment_name)
+    deadline_str = assignment_info['deadline']
+    try:
+        deadline_msg = deadline_fmt.format(assignment=assignment_name,
+                                           deadline=deadline_str)
+    except (IndexError, KeyError, ValueError) as e:
+        return None, _error('Error while building deadline message: {}: {}',
+                            e.__class__.__name__, e)
+    return deadline_msg, None
+
+
 def _build_notification_msg(**kwargs):
     msg = UPDATE_MESSAGE_TEMPLATE.format(**kwargs)
     graders_finalized = kwargs.get('graders_finalized', set())
@@ -109,18 +130,21 @@ def check_assignment_updates(assignment, timestamp_key, cached=None):
             args['default'] = kwargs['default']
         return max(nums, key=lambda a: (len(a), tuple(a)), **args)
 
-    # maps: submission id -> timestamp ->
+    sent_deadline_message = None
+    # maps: run index -> timestamp
+    runs = {}
+    index = 1
+    # maps: submission id -> run index ->
     #   status of "unclaimed", "draft", "finalized", or "deleted"
+    submissions = {}
+    deleted = set()
     if cached is not None:
-        submissions = cached['submissions']
-        runs = cached['runs']
+        sent_deadline_message = cached.get('sent_deadline_message',
+                                           sent_deadline_message)
+        runs = cached.get('runs', runs)
         index = int(max_int_num(runs.keys(), default=0)) + 1
+        submissions = cached.get('submissions', submissions)
         deleted = set(submissions.keys())
-    else:
-        submissions = {}
-        runs = {}
-        index = 1
-        deleted = set()
     index = str(index)
 
     updated_status = False
@@ -215,6 +239,7 @@ def check_assignment_updates(assignment, timestamp_key, cached=None):
         'finalized': num_finalized,
         'drafts': num_drafts,
         'unclaimed': num_unclaimed,
+        'sent_deadline_message': sent_deadline_message,
         'runs': runs,
         'submissions': submissions,
         'graders_finalized': graders_finalized,
@@ -242,6 +267,7 @@ def check_assignment_updates(assignment, timestamp_key, cached=None):
 
 def check_course_updates(slack_client,
                          channel,
+                         messages,
                          course_period,
                          course,
                          assignments,
@@ -258,10 +284,10 @@ def check_course_updates(slack_client,
 
     course_assignments = {a.name: a for a in course.assignments}
 
-    for assignment in assignments:
-        assignment_name = assignment['name']
+    for assignment_info in assignments:
+        assignment_name = assignment_info['name']
         print('processing assignment:', assignment_name)
-        if not assignment['valid_date_range']:
+        if not assignment_info['valid_date_range']:
             print('not in the proper date range')
             continue
         if assignment_name not in course_assignments:
@@ -277,6 +303,25 @@ def check_course_updates(slack_client,
             assignment, timestamp_key, assignment_cache)
         graders_finalized = assignment_data.pop('graders_finalized')
         data[assignment_name] = assignment_data
+
+        # if the deadline message has not been sent but the assignment passed
+        # its deadline, send the deadline message
+        if (assignment_data['sent_deadline_message'] is None and
+                assignment_info.get('passed_deadline', False)):
+            deadline_msg, error = _build_deadline_msg(messages, assignment_info)
+            if error is not None:
+                errors.append(error)
+            elif deadline_msg is not None:
+                print('passed deadline: sending message')
+                _, error = send_slack_msg(slack_client, channel, deadline_msg)
+                if error is not None:
+                    errors.append(_error('Slack API error: {}', error))
+                else:
+                    # if a deadline message hasn't been sent before, need to
+                    # update cached data so that the message doesn't get sent
+                    # again
+                    assignment_data['sent_deadline_message'] = now()
+                    changed = True
 
         if not assignment_changed:
             print('no change')
@@ -311,7 +356,7 @@ def check_course_updates(slack_client,
 # ==============================================================================
 
 
-def process_courses(slack_client, config, channels, cached):
+def process_courses(slack_client, config, channels, messages, cached):
     """Processes the assignments in the given courses and sends notifications to
     the specified Slack channel. Returns the new data to store, and a list of
     errors.
@@ -336,6 +381,7 @@ def process_courses(slack_client, config, channels, cached):
             check_course_updates(
                 slack_client,
                 channels[course_info['channel']],
+                messages,
                 course_period,
                 course,
                 course_info['assignments'],
@@ -463,7 +509,7 @@ def main():
         return
 
     data, changed, errors = process_courses(slack_client, config, channels,
-                                            cached_data)
+                                            messages, cached_data)
     if len(errors) > 0:
         save_errors(errors)
 
