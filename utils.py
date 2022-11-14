@@ -70,9 +70,9 @@ def get_slack_client(slack_token):
     slack_client = WebClient(token=slack_token)
     try:
         # validate the token
+        # https://api.slack.com/methods/auth.test
         slack_client.api_test()
     except SlackApiError as e:
-        # invalid auth: {"ok": False, "error": "invalid_auth"}
         if e.response['error'] == 'invalid_auth':
             return False, None
         raise

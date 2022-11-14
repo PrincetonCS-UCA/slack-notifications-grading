@@ -41,19 +41,18 @@ def _validate_slack_channels(slack_client, channels, fmt_error):
     errors = []
     for channel, channel_id in channels.items():
         try:
-            slack_client.chat_scheduledMessages_list(channel=channel_id)
+            # https://api.slack.com/methods/conversations.info
+            slack_client.conversations_info(channel=channel_id)
         except SlackApiError as e:
             if not e.response or e.reponse.get('ok', None) is not False:
                 raise
             reason = e.response.get('error', None)
             if reason is None:
                 raise
-            if reason == 'invalid_channel':
-                # invalid channel id: {"ok": False, "error": "invalid_channel"}
+            if reason == 'channel_not_found':
                 errors.append(
                     fmt_error('Invalid id for Slack channel "{}"', channel))
-            elif reason == 'not_in_channel':
-                # not in channel: {"ok": False, "error": "not_in_channel"}
+            elif reason == 'missing_scope':
                 errors.append(
                     fmt_error('Slack key does not have access to channel "{}"',
                               channel))
