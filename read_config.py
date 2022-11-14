@@ -162,12 +162,12 @@ def _validate_config_course(index, config_course):
             assignment['deadline'] = deadline
             has_deadline = True
             try:
-                deadline_dt = datetime.strptime(deadline.strip(), DEADLINE_FMT)
+                deadline_dt = datetime.strptime(deadline, DEADLINE_FMT)
             except ValueError:
                 return invalid(_invalid_assignment_msg +
                                ': invalid deadline format')
             deadline_utc = _eastern_to_utc(deadline_dt)
-            assignment['passed_deadline'] = deadline_utc >= now_dt()
+            assignment['passed_deadline'] = now_dt() >= deadline_utc
 
         assignments.append(assignment)
 
