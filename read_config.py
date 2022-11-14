@@ -224,7 +224,7 @@ def check(success):
 
 
 def validate():
-    """Reads the config file and validates the codePost courses ans assignments.
+    """Reads the config file and validates the codePost courses and assignments.
     """
     failed = False
 
