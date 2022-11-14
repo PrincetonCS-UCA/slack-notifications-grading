@@ -9,8 +9,8 @@ from datetime import datetime
 
 import codepost
 import pytz
-from slack import WebClient
-from slack.errors import SlackApiError
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
 
 # ==============================================================================
 
@@ -69,12 +69,11 @@ def get_slack_client(slack_token):
     """
     slack_client = WebClient(token=slack_token)
     try:
-        # validate the token using some random GET request
-        slack_client.chat_scheduledMessages_list()
+        # validate the token
+        # https://api.slack.com/methods/auth.test
+        slack_client.api_test()
     except SlackApiError as e:
-        # e.response should be: {"ok": False, "error": "invalid_auth"}
-        if (e.response and not e.response.get('ok', False) and
-                e.response.get('error', None) == 'invalid_auth'):
+        if e.response['error'] == 'invalid_auth':
             return False, None
         raise
     return True, slack_client

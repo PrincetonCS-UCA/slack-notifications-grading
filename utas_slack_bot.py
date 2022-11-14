@@ -12,7 +12,7 @@ from pathlib import Path
 
 import codepost
 from cryptography.fernet import Fernet, InvalidToken
-from slack.errors import SlackApiError
+from slack_sdk.errors import SlackApiError
 
 import read_config
 from utils import _error, get_slack_client, now, validate_codepost
