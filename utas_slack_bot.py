@@ -444,7 +444,7 @@ def main():
         save_errors(errors)
         return
 
-    channels, config, errors = read_config.read(slack_client)
+    channels, messages, config, errors = read_config.read(slack_client)
     if len(errors) > 0:
         save_errors(errors)
         return

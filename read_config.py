@@ -30,9 +30,20 @@ CONFIG_FILE = Path('config.yaml')
 UTC_TZ = pytz.utc
 EASTERN_TZ = pytz.timezone('US/Eastern')
 DATE_FMT = '%Y-%m-%d'
+DEADLINE_FMT = '%Y-%m-%d %H:%M'
 
 NO_DAY = timedelta()
 ONE_DAY = timedelta(days=1)
+
+# ==============================================================================
+
+# the support messages and the required keys
+MESSAGES_KWARGS = {
+    'deadline': {
+        'assignment': 'test',
+        'deadline': 'test'
+    },
+}
 
 # ==============================================================================
 
@@ -63,6 +74,10 @@ def _validate_slack_channels(slack_client, channels, fmt_error):
     return errors
 
 
+def _eastern_to_utc(dt):
+    return EASTERN_TZ.localize(dt).astimezone(UTC_TZ)
+
+
 def _valid_date_range(start, end):
     if start is None and end is None:
         return True
@@ -79,8 +94,7 @@ def _validate_config_course(index, config_course):
     otherwise, returns None and the course dict.
     """
 
-    _invalid_msg = (
-        f'Config file has an invalid course format at index {index}')
+    _invalid_msg = f'Config file has an invalid course format at index {index}'
 
     def invalid(msg=None):
         if msg is None:
@@ -107,14 +121,19 @@ def _validate_config_course(index, config_course):
         return invalid()
 
     assignments = []
+    has_deadline = False
     for j, config_assignment in enumerate(config_course['assignments']):
-        _invalid_assignment_msg = \
-            _invalid_msg + f', assignment index {j}'
+        _invalid_assignment_msg = _invalid_msg + f', assignment index {j}'
         if not isinstance(config_assignment, dict):
             return invalid(_invalid_assignment_msg)
 
         assignment = {}
-        for key, required in (('name', True), ('start', False), ('end', False)):
+        for key, required in (
+            ('name', True),
+            ('start', False),
+            ('end', False),
+            ('deadline', False),
+        ):
             if key not in config_assignment:
                 if not required:
                     assignment[key] = None
@@ -134,16 +153,28 @@ def _validate_config_course(index, config_course):
                 return invalid(_invalid_assignment_msg +
                                ': invalid date format')
             date += delta
-            # convert to eastern, then to utc
-            date_utc = EASTERN_TZ.localize(date).astimezone(UTC_TZ)
-            assignment[key] = date_utc
+            assignment[key] = _eastern_to_utc(date)
 
         assignment['valid_date_range'] = \
             _valid_date_range(assignment['start'], assignment['end'])
 
+        deadline = assignment['deadline']
+        if deadline is not None:
+            deadline = deadline.strip()
+            assignment['deadline'] = deadline
+            has_deadline = True
+            try:
+                deadline_dt = datetime.strptime(deadline.strip(), DEADLINE_FMT)
+            except ValueError:
+                return invalid(_invalid_assignment_msg +
+                               ': invalid deadline format')
+            deadline_utc = _eastern_to_utc(deadline_dt)
+            assignment['passed_deadline'] = deadline_utc >= now_dt()
+
         assignments.append(assignment)
 
     course['assignments'] = assignments
+    course['has_deadline'] = has_deadline
 
     return None, course
 
@@ -152,11 +183,12 @@ def read(slack_client, fmt_error=_error):
     """Reads the config file.
     Fails on invalid channel ids, missing required keys, unexpected types,
     repeated course name and period pairs, and unknown channel names.
-    Returns the mapping of channels, the list of courses, and a list of errors.
+    Returns the mapping of channels, the mapping of messages, the list of
+    courses, and a list of errors.
     """
     errors = []
 
-    INVALID_RETURN = None, None, errors
+    INVALID_RETURN = None, None, None, errors
 
     if not CONFIG_FILE.exists():
         errors.append(fmt_error('Config file "{}" does not exist', CONFIG_FILE))
@@ -166,32 +198,70 @@ def read(slack_client, fmt_error=_error):
 
     # validate highest-level types
     if not isinstance(config, dict):
-        errors.append(fmt_error('Config file has an invalid format'))
+        errors.append(
+            fmt_error('Config file has an invalid format (expected dict)'))
         return INVALID_RETURN
-    for value, expected in (
-        (config.get('channels', None), dict),
-        (config.get('sources', None), list),
+
+    for key, default, expected in (
+        ('channels', None, dict),
+        ('messages', {}, dict),
+        ('sources', None, list),
     ):
-        if not isinstance(value, expected):
-            errors.append(fmt_error('Config file has an invalid format'))
-            return INVALID_RETURN
+        if not isinstance(config.get(key, default), expected):
+            errors.append(
+                fmt_error(
+                    'Config file has an invalid format: key "{}" '
+                    'expected to have type {}', key, expected.__name__))
+    if len(errors) > 0:
+        return INVALID_RETURN
 
     # read channels
     channels = {}
     for channel, channel_id in config['channels'].items():
         if not isinstance(channel_id, str):
             errors.append(
-                fmt_error(
-                    'Slack channels file has an invalid channel id for '
-                    'channel "{}" (expected str)', channel))
+                fmt_error('Invalid channel id for channel "{}" (expected str)',
+                          channel))
             continue
         channels[channel] = channel_id
     errors += _validate_slack_channels(slack_client, channels, fmt_error)
     if len(errors) > 0:
         return INVALID_RETURN
 
+    # read messages
+    messages = {}
+    for key, value in config.get('messages', {}).items():
+        if not isinstance(value, str):
+            errors.append(
+                fmt_error('Invalid message for key "{}" (expected str)', key))
+            continue
+        messages[key] = value
+    if len(errors) > 0:
+        return INVALID_RETURN
+    # validate messages
+    for key, kwargs in MESSAGES_KWARGS.items():
+        if key not in messages:
+            continue
+        message = messages[key].strip()
+        if message == '':
+            errors.append(fmt_error('Empty message str for key "{}"', key))
+            continue
+        messages[key] = message
+        try:
+            message.format(**kwargs)
+        except (IndexError, KeyError, ValueError) as e:
+            errors.append(
+                fmt_error(
+                    'Invalid message str for key "{}" '
+                    '(supported variable keys are: {}): {}: {}', key,
+                    ', '.join(f'"{var_key}"' for var_key in kwargs),
+                    e.__class__.__name__, e))
+    if len(errors) > 0:
+        return INVALID_RETURN
+
     # read sources
     courses = {}
+    has_deadline = False
     for i, config_course in enumerate(config['sources']):
         invalid_msg, course = _validate_config_course(i, config_course)
         if invalid_msg is not None:
@@ -205,14 +275,22 @@ def read(slack_client, fmt_error=_error):
         if course['channel'] not in channels:
             errors.append(
                 fmt_error(
-                    'Config file has unknown channel name "{}" '
-                    'for course "{}"', course['channel'], course_period))
+                    'Config file has unknown channel name "{}" for course "{}"',
+                    course['channel'], course_period))
             continue
+        if course.pop('has_deadline'):
+            has_deadline = True
         courses[course_period] = course
     if len(errors) > 0:
         return INVALID_RETURN
 
-    return channels, courses, errors
+    if has_deadline and 'deadline' not in messages:
+        errors.append(
+            fmt_error(
+                'Deadlines given in assignments, but missing deadline message'))
+        return INVALID_RETURN
+
+    return channels, messages, courses, errors
 
 
 # ==============================================================================
@@ -256,7 +334,7 @@ def validate():
         print(msg.format(*args, **kwargs))
         return 0
 
-    _, config, errors = read(slack_client, fmt_error=fmt_error)
+    _, _, config, errors = read(slack_client, fmt_error=fmt_error)
     check(len(errors) == 0)
 
     # validate all codePost objects
