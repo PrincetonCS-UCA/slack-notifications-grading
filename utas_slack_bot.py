@@ -89,23 +89,20 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
     print('sending message to channel:', channel_id)
     print(msg)
 
+    kwargs = {'channel': channel_id}
+    if as_block:
+        kwargs['blocks'] = [{
+            'type': 'section',
+            'text': {
+                'type': 'mrkdwn',
+                'text': msg,
+            },
+        }]
+    else:
+        kwargs['text'] = msg
+
     try:
-        if as_block:
-            response = slack_client.chat_postMessage(
-                channel=channel_id,
-                blocks=[{
-                    'type': 'section',
-                    'text': {
-                        'type': 'mrkdwn',
-                        'text': msg,
-                    },
-                }],
-            )
-        else:
-            response = slack_client.chat_postMessage(
-                channel=channel_id,
-                text=msg,
-            )
+        response = slack_client.chat_postMessage(**kwargs)
         error = None
     except SlackApiError as e:
         response = None
