@@ -73,7 +73,7 @@ def _validate_slack_channels(slack_client, channels, fmt_error):
             # https://api.slack.com/methods/conversations.info
             slack_client.conversations_info(channel=channel_id)
         except SlackApiError as e:
-            if not e.response or e.reponse.get('ok', None) is not False:
+            if not e.response or e.response.get('ok', None) is not False:
                 raise
             reason = e.response.get('error', None)
             if reason is None:
