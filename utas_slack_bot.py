@@ -27,14 +27,31 @@ ERROR_LOGS_FILE = CACHED_DATA_FOLDER / '_ERRORS.txt'
 # ==============================================================================
 
 
-def _build_deadline_msg(messages, assignment_info):
+def _get_assignment_stats(assignment_data):
+    total = assignment_data['total']
+    finalized = assignment_data['finalized']
+    if total == 0:
+        done = 0
+    else:
+        done = finalized / total
+    return {
+        'done': done,
+        'total': total,
+        'finalized': finalized,
+        'drafts': assignment_data['drafts'],
+        'unclaimed': assignment_data['unclaimed'],
+    }
+
+
+def _build_deadline_msg(messages, assignment_info, assignment_data):
     """Builds a deadline message.
     Returns the message and None, or None and an error message if there was an
     error.
     """
     deadline_msg, error = _try_format(messages['deadline'],
                                       assignment=assignment_info['name'],
-                                      deadline=assignment_info['deadline'])
+                                      deadline=assignment_info['deadline'],
+                                      **_get_assignment_stats(assignment_data))
     if error is not None:
         return None, _error('Error while building deadline message: {}', error)
     return deadline_msg, None
@@ -46,22 +63,10 @@ def _build_notification_msg(messages, assignment_name, assignment_data,
     Returns the message and None, or None and an error message if there was an
     error.
     """
-    total = assignment_data['total']
-    finalized = assignment_data['finalized']
-    drafts = assignment_data['drafts']
-    unclaimed = assignment_data['unclaimed']
-    if total == 0:
-        done = 0
-    else:
-        done = finalized / total
-
-    notification_msg, error = _try_format(messages['notification'],
-                                          assignment=assignment_name,
-                                          done=done,
-                                          total=total,
-                                          finalized=finalized,
-                                          drafts=drafts,
-                                          unclaimed=unclaimed)
+    notification_msg, error = _try_format(
+        messages['notification'],
+        assignment=assignment_name,
+        **_get_assignment_stats(assignment_data))
     if error is not None:
         return None, _error('Error while building notification message: {}',
                             error)
@@ -314,7 +319,8 @@ def check_course_updates(slack_client,
         # its deadline, send the deadline message
         if (assignment_data['sent_deadline_message'] is None and
                 assignment_info.get('passed_deadline', False)):
-            deadline_msg, error = _build_deadline_msg(messages, assignment_info)
+            deadline_msg, error = _build_deadline_msg(messages, assignment_info,
+                                                      assignment_data)
             if error is not None:
                 errors.append(error)
             else:

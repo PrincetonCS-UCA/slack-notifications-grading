@@ -70,7 +70,7 @@ with possible variable replacements. The following keys are supported:
     a percentage.
   - `total`: The total number of submissions.
   - `finalized`: The number of finalized submissions.
-  - `drafts`: The number of drafts.
+  - `drafts`: The number of draft submissions.
   - `unclaimed`: The number of unclaimed submissions.
 - `recent_graders`: A message to attach after `notification` listing the graders
   who have finalized a submission since the last run. Only applies if the number
@@ -80,6 +80,13 @@ with possible variable replacements. The following keys are supported:
   is passed. Accepts the following variables:
   - `assignment`: The name of the assignment being processed.
   - `deadline`: The specified deadline in the config file for this assignment.
+  - `done`: The percentage of assignments finalized. Note this number is between
+    0 and 1, so it is recommended to use the `{done:.2%}` format to format it as
+    a percentage.
+  - `total`: The total number of submissions.
+  - `finalized`: The number of finalized submissions.
+  - `drafts`: The number of draft submissions.
+  - `unclaimed`: The number of unclaimed submissions.
 
 ## Deterministic Finite Automaton
 

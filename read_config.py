@@ -43,7 +43,7 @@ ONE_DAY = timedelta(days=1)
 MESSAGES_KWARGS = {
     'notification': {
         'assignment': 'assignment',
-        'done': 0.5,
+        'done': 0.3,
         'total': 10,
         'finalized': 3,
         'drafts': 3,
@@ -55,6 +55,11 @@ MESSAGES_KWARGS = {
     'deadline': {
         'assignment': 'assignment',
         'deadline': '2022-01-01 00:00',
+        'done': 0.3,
+        'total': 10,
+        'finalized': 3,
+        'drafts': 3,
+        'unclaimed': 4,
     },
 }
 
