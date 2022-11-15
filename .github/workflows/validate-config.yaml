@@ -1,6 +1,6 @@
 on:
   push:
-    paths: ['config.yaml']
+    paths: ['read_config.py', 'config.yaml']
   pull_request:
     paths: ['config.yaml']
 
