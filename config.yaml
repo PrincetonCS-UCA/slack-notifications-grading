@@ -4,6 +4,13 @@ channels:
   '#random': 'CTLAUK751'
   '#226-grading-notifications': 'C048UC8GAKZ'
 
+messages:
+  notification: '*{assignment}*: {done:.2%} done
+    ({finalized} finalized, {drafts} drafts, {unclaimed} left to grade)'
+  recent_graders: 'Graders who recently finalized: {graders}'
+  deadline: '*{assignment}*: All submissions should now be finalized
+    ({deadline} deadline)'
+
 sources:
   - course: 'COS126'
     period: 'F2022'

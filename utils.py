@@ -77,3 +77,20 @@ def get_slack_client(slack_token):
             return False, None
         raise
     return True, slack_client
+
+
+# ==============================================================================
+
+
+def _try_format(fmt_str, **kwargs):
+    """Tries to format the given format string with the given keyword arguments.
+    Returns the formatted message and None, or None and the exception message.
+    """
+    try:
+        return fmt_str.format(**kwargs), None
+    except KeyError as e:
+        # will only return the erroneous key as the error message, so include
+        # some extra information
+        return None, f'Unknown key: {e}'
+    except (IndexError, ValueError) as e:
+        return None, str(e)

@@ -15,7 +15,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from slack_sdk.errors import SlackApiError
 
 import read_config
-from utils import _error, get_slack_client, now, validate_codepost
+from utils import _error, _try_format, get_slack_client, now, validate_codepost
 
 # ==============================================================================
 
@@ -23,17 +23,6 @@ from utils import _error, get_slack_client, now, validate_codepost
 CACHED_DATA_FOLDER = Path('./data')
 
 ERROR_LOGS_FILE = CACHED_DATA_FOLDER / '_ERRORS.txt'
-
-# yapf: disable
-UPDATE_MESSAGE_TEMPLATE = (
-    '*{assignment}*: {done:.2%} done ' +
-    '({finalized} finalized, {drafts} drafts, ' +
-    '{unclaimed} left to grade)'
-)
-GRADERS_RECENTLY_FINALIZED_TEMPLATE = (
-    'Graders who recently finalized: {graders}'
-)
-# yapf: enable
 
 # ==============================================================================
 
@@ -43,26 +32,41 @@ def _build_deadline_msg(messages, assignment_info):
     Returns the message and None, or None and an error message if there was an
     error.
     """
-    assignment_name = assignment_info['name']
-    deadline_fmt = messages.get('deadline', None)
-    if deadline_fmt is None:
-        return None, _error(
-            'Assignment "{}" has a deadline, but no deadline message was given',
-            assignment_name)
-    deadline_str = assignment_info['deadline']
-    try:
-        deadline_msg = deadline_fmt.format(assignment=assignment_name,
-                                           deadline=deadline_str)
-    except (IndexError, KeyError, ValueError) as e:
-        return None, _error('Error while building deadline message: {}: {}',
-                            e.__class__.__name__, e)
+    deadline_msg, error = _try_format(messages['deadline'],
+                                      assignment=assignment_info['name'],
+                                      deadline=assignment_info['deadline'])
+    if error is not None:
+        return None, _error('Error while building deadline message: {}', error)
     return deadline_msg, None
 
 
-def _build_notification_msg(**kwargs):
-    msg = UPDATE_MESSAGE_TEMPLATE.format(**kwargs)
-    graders_finalized = kwargs.get('graders_finalized', set())
-    if len(graders_finalized) > 0:
+def _build_notification_msg(messages, assignment_name, assignment_data,
+                            graders_finalized):
+    """Builds a notification message.
+    Returns the message and None, or None and an error message if there was an
+    error.
+    """
+    total = assignment_data['total']
+    finalized = assignment_data['finalized']
+    drafts = assignment_data['drafts']
+    unclaimed = assignment_data['unclaimed']
+    if total == 0:
+        done = 0
+    else:
+        done = finalized / total
+
+    notification_msg, error = _try_format(messages['notification'],
+                                          assignment=assignment_name,
+                                          done=done,
+                                          total=total,
+                                          finalized=finalized,
+                                          drafts=drafts,
+                                          unclaimed=unclaimed)
+    if error is not None:
+        return None, _error('Error while building notification message: {}',
+                            error)
+
+    if 'recent_graders' in messages and len(graders_finalized) > 0:
         graders = []
         for grader in graders_finalized:
             # remove "@princeton.edu"
@@ -70,9 +74,14 @@ def _build_notification_msg(**kwargs):
             # put in backticks
             graders.append(f'`{grader}`')
         graders_str = ', '.join(graders)
-        msg += '\n' + GRADERS_RECENTLY_FINALIZED_TEMPLATE.format(
-            graders=graders_str)
-    return msg
+        recent_graders_msg, error = _try_format(messages['recent_graders'],
+                                                graders=graders_str)
+        if error is not None:
+            return None, _error(
+                'Error while building recent graders message: {}', error)
+        notification_msg += '\n' + recent_graders_msg
+
+    return notification_msg, None
 
 
 # ==============================================================================
@@ -308,7 +317,7 @@ def check_course_updates(slack_client,
             deadline_msg, error = _build_deadline_msg(messages, assignment_info)
             if error is not None:
                 errors.append(error)
-            elif deadline_msg is not None:
+            else:
                 print('passed deadline: sending message')
                 _, error = send_slack_msg(slack_client, channel, deadline_msg)
                 if error is not None:
@@ -326,26 +335,16 @@ def check_course_updates(slack_client,
 
         changed = True
         print('assignment changed: sending notification')
-        total = assignment_data['total']
-        finalized = assignment_data['finalized']
-        drafts = assignment_data['drafts']
-        unclaimed = total - (finalized + drafts)
-        if total == 0:
-            done = 0
-        else:
-            done = finalized / total
-
-        update_msg = _build_notification_msg(
-            assignment=assignment_name,
-            done=done,
-            finalized=finalized,
-            drafts=drafts,
-            unclaimed=unclaimed,
-            graders_finalized=graders_finalized)
-        # the response doesn't matter
-        _, error = send_slack_msg(slack_client, channel, update_msg)
+        update_msg, error = _build_notification_msg(messages, assignment_name,
+                                                    assignment_data,
+                                                    graders_finalized)
         if error is not None:
-            errors.append(_error('Slack API error: {}', error))
+            errors.append(error)
+        else:
+            # the response doesn't matter
+            _, error = send_slack_msg(slack_client, channel, update_msg)
+            if error is not None:
+                errors.append(_error('Slack API error: {}', error))
 
     return data, changed, errors
 

@@ -20,8 +20,13 @@ There should be a `config.yaml` file with the following format:
 channels:
   "#126-grading-notifications": "ABC123"
 
+# The message formats
 messages:
-  deadline: "*{assignment}*: All submissions should now be finalized ({deadline} deadline)"
+  notification: "*{assignment}*: {done:.2%} done 
+    ({finalized} finalized, {drafts} drafts, {unclaimed} left to grade)"
+  recent_graders: "Graders who recently finalized: {graders}"
+  deadline: "*{assignment}*: All submissions should now be finalized
+    ({deadline} deadline)"
 
 # The courses and assignments to send notifications for
 sources:
@@ -49,17 +54,30 @@ should be in the format `"YYYY-MM-DD"` and will be considered in Eastern Time.
 
 The optional `deadline` value defines a time to send a notification that the
 deadline has passed for all submissions to be finalized. The value should be in
-the format `"YYYY-MM-DD HH:MM"` and will be considered in Eastern Time. The text
-may be customized; see below.
+the format `"YYYY-MM-DD HH:MM"` and will be considered in Eastern Time.
 
 To customize the text of certain notification messages, define the `messages`
 mapping. Each value should follow
 [Python `str.format` specifications][str.format],
 with possible variable replacements. The following keys are supported:
 
+- `notification` (required): The notification message whenever an assignment has
+  different numbers for total, unclaimed, drafts, or finalized submissions.
+  Accepts the following variables:
+  - `assignment`: The name of the assignment being processed.
+  - `done`: The percentage of assignments finalized. Note this number is between
+    0 and 1, so it is recommended to use the `{done:.2%}` format to format it as
+    a percentage.
+  - `total`: The total number of submissions.
+  - `finalized`: The number of finalized submissions.
+  - `drafts`: The number of drafts.
+  - `unclaimed`: The number of unclaimed submissions.
+- `recent_graders`: A message to attach after `notification` listing the graders
+  who have finalized a submission since the last run. Only applies if the number
+  of graders is greater than 0. Accepts the following variables:
+  - `graders`: A comma separated list of all the graders in backticks.
 - `deadline`: The notification message for when the deadline for an assignment
   is passed. Accepts the following variables:
-
   - `assignment`: The name of the assignment being processed.
   - `deadline`: The specified deadline in the config file for this assignment.
 

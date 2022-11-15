@@ -17,7 +17,8 @@ import pytz
 import yaml
 from slack_sdk.errors import SlackApiError
 
-from utils import _error, get_slack_client, now_dt, validate_codepost
+from utils import (_error, _try_format, get_slack_client, now_dt,
+                   validate_codepost)
 
 # ==============================================================================
 
@@ -37,11 +38,23 @@ ONE_DAY = timedelta(days=1)
 
 # ==============================================================================
 
-# the support messages and the required keys
+# the support messages and the required keys, with test values to validate the
+# format string
 MESSAGES_KWARGS = {
+    'notification': {
+        'assignment': 'assignment',
+        'done': 0.5,
+        'total': 10,
+        'finalized': 3,
+        'drafts': 3,
+        'unclaimed': 4,
+    },
+    'recent_graders': {
+        'graders': '`grader1`, `grader2`',
+    },
     'deadline': {
-        'assignment': 'test',
-        'deadline': 'test'
+        'assignment': 'assignment',
+        'deadline': '2022-01-01 00:00',
     },
 }
 
@@ -233,8 +246,14 @@ def read(slack_client, fmt_error=_error):
             errors.append(
                 fmt_error('Invalid message for key "{}" (expected str)', key))
             continue
+        if key not in MESSAGES_KWARGS:
+            continue
         messages[key] = value
     if len(errors) > 0:
+        return INVALID_RETURN
+    if 'notification' not in messages:
+        # required
+        errors.append(fmt_error('Missing message format for "notification"'))
         return INVALID_RETURN
     # validate messages
     for key, kwargs in MESSAGES_KWARGS.items():
@@ -245,15 +264,13 @@ def read(slack_client, fmt_error=_error):
             errors.append(fmt_error('Empty message str for key "{}"', key))
             continue
         messages[key] = message
-        try:
-            message.format(**kwargs)
-        except (IndexError, KeyError, ValueError) as e:
+        _, error = _try_format(message, **kwargs)
+        if error is not None:
             errors.append(
                 fmt_error(
-                    'Invalid message str for key "{}" '
-                    '(supported variable keys are: {}): {}: {}', key,
-                    ', '.join(f'"{var_key}"' for var_key in kwargs),
-                    e.__class__.__name__, e))
+                    'Invalid message format for key "{}" '
+                    '(supported variable keys are: {}): {}', key,
+                    ', '.join(f'"{var_key}"' for var_key in kwargs), error))
     if len(errors) > 0:
         return INVALID_RETURN
 
