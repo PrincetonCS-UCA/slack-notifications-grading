@@ -62,6 +62,7 @@ jobs:
           pipenv run python ./utas_slack_bot.py
 
       - name: Commit generated logs 🚀
+        if: success() || failure()
         uses: EndBug/add-and-commit@v9
         with:
           message: "Commit updated data"
