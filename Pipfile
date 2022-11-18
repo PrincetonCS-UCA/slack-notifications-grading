@@ -13,6 +13,7 @@ slack-sdk = "*"
 [dev-packages]
 autopep8 = "*"
 ipykernel = "*"
+yapf = "*"
 
 [requires]
 python_version = "3.9"
