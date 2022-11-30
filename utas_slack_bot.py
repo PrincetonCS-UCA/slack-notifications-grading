@@ -130,8 +130,8 @@ def send_slack_msg(slack_client, channel_id, msg, as_block=False):
 
 def check_assignment_updates(assignment, timestamp_key, cached=None):
     """Checks the codePost assignment for updates, comparing to the cached data.
-    Returns whether there were updates and the new data to store for this
-    assignment.
+    Returns whether to save new data, whether to send a notification, and the
+    new data to store for this assignment.
     """
 
     def max_int_num(nums, **kwargs):
@@ -256,11 +256,7 @@ def check_assignment_updates(assignment, timestamp_key, cached=None):
         'graders_finalized': graders_finalized,
     }
 
-    if num_total == 0 or num_finalized == 0:
-        # no submissions uploaded or no submissions finalized: no need to send
-        # notification
-        changed = False
-    elif cached is None:
+    if cached is None:
         # first time getting data
         changed = True
     elif updated_status:
@@ -270,7 +266,13 @@ def check_assignment_updates(assignment, timestamp_key, cached=None):
             cached.get(key, None) != data[key]
             for key in ('total', 'finalized', 'drafts', 'unclaimed'))
 
-    return changed, data
+    send_notif = changed
+    if num_total == 0 or num_finalized == 0:
+        # no submissions uploaded or no submissions finalized: no need to send
+        # notification
+        send_notif = False
+
+    return changed, send_notif, data
 
 
 # ==============================================================================
@@ -284,7 +286,8 @@ def check_course_updates(slack_client,
                          assignments,
                          cached=None):
     """Checks the codePost course for updates, comparing to the cached data.
-    Returns the new data to store for this course, and a list of errors.
+    Returns the new data to store for this course, whether the data changed, and
+    a list of errors.
     """
     if cached is None:
         cached = {}
@@ -310,10 +313,13 @@ def check_course_updates(slack_client,
         assignment_cache = cached.get(assignment_name, None)
 
         timestamp_key = now()
-        assignment_changed, assignment_data = check_assignment_updates(
-            assignment, timestamp_key, assignment_cache)
+        assignment_changed, send_notif, assignment_data = (
+            check_assignment_updates(assignment, timestamp_key,
+                                     assignment_cache))
         graders_finalized = assignment_data.pop('graders_finalized')
         data[assignment_name] = assignment_data
+        if assignment_changed:
+            changed = True
 
         # if the deadline message has not been sent but the assignment passed
         # its deadline, send the deadline message
@@ -335,8 +341,10 @@ def check_course_updates(slack_client,
                     assignment_data['sent_deadline_message'] = now()
                     changed = True
 
-        if not assignment_changed:
-            print('no change')
+        if not send_notif:
+            if assignment_changed:
+                print('data changed, but ', end='')
+            print('not sending notification')
             continue
 
         changed = True
