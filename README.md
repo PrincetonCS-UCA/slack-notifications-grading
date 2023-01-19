@@ -10,6 +10,8 @@ This repository uses a synchronized GitHub Action trigger to regularly check
 codePost for certain changes to data (such as available submissions, graded
 submissions, etc.), and to trigger a Slack notification if changes were found.
 
+![A screenshot of the bot in action at Princeton CS; notice how the users celebrate reaching 100%.](screenshot.png)
+
 ## Configuration
 
 There should be a `config.yaml` file with the following format:
