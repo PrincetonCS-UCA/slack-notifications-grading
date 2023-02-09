@@ -46,7 +46,7 @@ sources:
         start: '2023-04-18'
         end: '2023-04-23'
   - course: 'COS226'
-    period: 'F2022'
+    period: 'S2023'
     channel: '#226-grading-notifications'
     assignments:
       # start date is the day before grading starts
