@@ -5,12 +5,22 @@ on:
   workflow_dispatch:
   schedule:
     # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule
+    # Since Eastern Standard Time has a 5 hour offset from UTC (which is when
+    # these workflows run), and we want 30 minute intervals until the deadline
+    # of Friday 11:59 pm, we need to define extra cron schedules for the special
+    # case of Saturday.
     # Runs every half hour on Wednesday, Thursday, and Friday.
     # https://crontab.guru/#0,30_*_*_*_3,4,5
-    - cron: "0,30 * * * 3,4,5"
-    # Runs every 3rd hour on Sunday, Monday, Tuesday, and Saturday.
+    - cron: '0,30 * * * 3,4,5'
+    # Runs every half hour until 5:30 am on Saturday.
+    # https://crontab.guru/#0,30_0-5_*_*_6
+    - cron: '0,30 0-5 * * 6'
+    # Runs every 3rd hour starting from 6 am on Saturday.
+    # https://crontab.guru/#0_6/3_*_*_6
+    - cron: '0 6/3 * * 6'
+    # Runs every 3rd hour on Sunday, Monday, and Tuesday.
     # https://crontab.guru/#0_0/3_*_*_0,1,2,6
-    - cron: "0 0/3 * * 0,1,2,6"
+    - cron: '0 0/3 * * 0,1,2,6'
 
 name: UTAs Slack Bot Notifications
 jobs:
@@ -25,7 +35,7 @@ jobs:
       pull-requests: write
       repository-projects: write
     env:
-      PIPENV_VENV_IN_PROJECT: "enabled"
+      PIPENV_VENV_IN_PROJECT: 'enabled'
 
     steps:
       - name: Check out repository code
@@ -35,7 +45,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: "3.9"
+          python-version: '3.9'
 
       - name: Install pipenv
         run: |
@@ -68,9 +78,9 @@ jobs:
         if: success() || failure()
         uses: EndBug/add-and-commit@v9
         with:
-          message: "Commit updated data"
-          add: "./data/*"
-          cwd: "."
+          message: 'Commit updated data'
+          add: './data/*'
+          cwd: '.'
           force: true
           default_author: github_actions
         env:
