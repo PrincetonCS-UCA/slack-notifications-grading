@@ -53,7 +53,7 @@ sources:
       # end date is the day after grading ends
       - name: 'Percolation'
         start: '2023-02-07'
-        end: '2023-02-11'
+        end: '2023-02-13'
       - name: 'Queues'
         start: '2023-02-14'
         end: '2023-02-18'
