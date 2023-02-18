@@ -19,8 +19,8 @@ on:
     # https://crontab.guru/#0_6/3_*_*_6
     - cron: '0 6/3 * * 6'
     # Runs every 3rd hour on Sunday, Monday, and Tuesday.
-    # https://crontab.guru/#0_0/3_*_*_0,1,2,6
-    - cron: '0 0/3 * * 0,1,2,6'
+    # https://crontab.guru/#0_0/3_*_*_0,1,2
+    - cron: '0 0/3 * * 0,1,2'
 
 name: UTAs Slack Bot Notifications
 jobs:
