@@ -24,6 +24,11 @@ CACHED_DATA_FOLDER = Path('./data')
 
 ERROR_LOGS_FILE = CACHED_DATA_FOLDER / '_ERRORS.txt'
 
+IGNORE_GRADER_PREFIX = [
+    # difficult or bad submissions; being held for a reason
+    'jdlou+',
+]
+
 # ==============================================================================
 
 
@@ -206,7 +211,14 @@ def check_assignment_updates(assignment, timestamp_key, cached=None):
             if last_status['status'] != 'finalized':
                 graders_finalized.add(submission.grader)
         elif submission.grader is not None:
-            num_drafts += 1
+            for prefix in IGNORE_GRADER_PREFIX:
+                if submission.grader.startswith(prefix):
+                    # ignore
+                    num_total -= 1
+                    break
+            else:
+                # don't ignore
+                num_drafts += 1
             status = 'draft'
         else:
             num_unclaimed += 1
