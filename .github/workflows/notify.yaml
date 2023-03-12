@@ -5,28 +5,37 @@ on:
   workflow_dispatch:
   schedule:
     # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule
-    # Since Eastern Standard Time has a 5 hour offset from UTC (which is where
-    # these workflows run), and we want 30 minute intervals until the deadline
-    # of Friday 11:59 pm, we need to define extra cron schedules for the special
-    # case of Saturday.
-    # Runs every 3rd hour on Tuesday until 5 pm.
-    # https://crontab.guru/#0_0,3,6,9,12,15_*_*_2
-    - cron: '0 0,3,6,9,12,15 * * 2'
-    # Runs every half hour on Tuesday after 5 pm.
-    # https://crontab.guru/#0,30_12-23_*_*_2
-    - cron: '0,30 17-23 * * 2'
-    # Runs every half hour on Wednesday, Thursday, and Friday.
-    # https://crontab.guru/#0,30_*_*_*_3,4,5
+    # Since Eastern Time has a 4 hour offset from UTC (which is where these
+    # workflows run), and we want 30 minute intervals until the deadline of
+    # Friday 11:59 pm, we need to define extra cron schedules for the time
+    # differences.
+
+    # +-----------+--------------------------+--------------------------+
+    # | Day       | Eastern (Daylight) Time  | UTC                      |
+    # +-----------+--------------------------+--------------------------+
+    # | Sunday    | Every 3 hrs from 0-23    | Every 3 hrs from 4-3+    |
+    # | Monday    | Every 3 hrs from 0-23    | Every 3 hrs from 4-3+    |
+    # | Tuesday   | Every 3 hrs from 0-12    | Every 3 hrs from 4-16    |
+    # |           | Every 30 mins from 12-23 | Every 30 mins from 16-3+ |
+    # | Wednesday | Every 30 mins from 0-23  | Every 30 mins from 4-3+  |
+    # | Thursday  | Every 30 mins from 0-23  | Every 30 mins from 4-3+  |
+    # | Friday    | Every 30 mins from 0-23  | Every 30 mins from 4-3+  |
+    # | Saturday  | Every 3 hrs from 0-23    | Every 3 hrs from 4-3+    |
+    # +-----------+--------------------------+--------------------------+
+
+    # https://crontab.guru/
+    # Sunday
+    - cron: '0 1/3 * * 0'
+    # Monday
+    - cron: '0 1/3 * * 1'
+    # Tuesday
+    - cron: '0 1,4,7,10,13 * * 2'
+    - cron: '0,30 16-23 * * 2'
+    # Wednesday, Thursday, Friday
     - cron: '0,30 * * * 3,4,5'
-    # Runs every half hour until 5:30 am on Saturday.
-    # https://crontab.guru/#0,30_0-5_*_*_6
-    - cron: '0,30 0-5 * * 6'
-    # Runs every 3rd hour starting from 6 am on Saturday.
-    # https://crontab.guru/#0_6/3_*_*_6
-    - cron: '0 6/3 * * 6'
-    # Runs every 3rd hour on Sunday and Monday.
-    # https://crontab.guru/#0_0/3_*_*_0,1
-    - cron: '0 0/3 * * 0,1'
+    # Saturday
+    - cron: '0,30 0-3 * * 6'
+    - cron: '0 4/3 * * 6'
 
 name: UTAs Slack Bot Notifications
 jobs:
