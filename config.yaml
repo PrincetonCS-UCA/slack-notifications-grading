@@ -34,7 +34,7 @@ sources:
         deadline: '2023-03-03 23:59'
       - name: 'Sierpinski'
         start: '2023-03-07'
-        end: '2023-03-15'
+        end: '2023-03-22'
         deadline: '2023-03-10 23:59'
       # recess
       # we don't grade Hamming
