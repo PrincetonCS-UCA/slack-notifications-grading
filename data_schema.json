@@ -102,7 +102,7 @@
           "description": "The saved data for each submission in the assignment",
           "patternProperties": {
             "^\\d+$": {
-              "description": "The saved data for this submission id",
+              "description": "The saved data for this submission id. To avoid redundancy, successive runs where the status and grader are the same will not be saved.",
               "patternProperties": {
                 "^\\d+$": {
                   "description": "The saved data for this run number",
