@@ -28,18 +28,18 @@ HELP_USAGE = (
 def main():
     # The first arg is this filename
     _, *args = sys.argv
-    if len(args) == 0 or any(arg in ('-h', '--help') for arg in args):
+    if len(args) == 0 or any(arg in ("-h", "--help") for arg in args):
         print(HELP_USAGE)
         return
 
     filepath = Path(args[0])
-    if not filepath.exists:
+    if not filepath.exists():
         print(f'Error: file "{filepath}" does not exist')
         return
 
-    decryption_key = os.environ.get('DECRYPTION_KEY', None)
+    decryption_key = os.environ.get("DECRYPTION_KEY", None)
     if decryption_key is None:
-        print('Cannot find decryption key')
+        print("Cannot find decryption key")
         return
 
     encoded_data_bytes = filepath.read_bytes()
@@ -47,7 +47,7 @@ def main():
         crypto = Fernet(decryption_key)
         decoded_data_bytes = crypto.decrypt(encoded_data_bytes)
     except (ValueError, InvalidToken):
-        print('Error: Invalid decryption key used for stored data')
+        print("Error: Invalid decryption key used for stored data")
         return
 
     data = json.loads(decoded_data_bytes)
@@ -55,11 +55,11 @@ def main():
 
     if len(args) >= 2:
         output_filepath = Path(args[1])
-        output_filepath.write_text(data_str, encoding='utf-8')
+        output_filepath.write_text(data_str, encoding="utf-8")
     else:
         # print it nicely
         print(data_str)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
