@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Slack Bot's saved data",
+  "description": "The saved data for a single course by the Slack bot",
+  "example": {
+    "Assignment Name": {
+      "total": 3,
+      "finalized": 1,
+      "drafts": 1,
+      "unclaimed": 1,
+      "sent_deadline_message": "2023-02-01 12:00:00.123456",
+      "runs": {
+        "1": "2023-01-01 12:00:00.000000",
+        "2": "2023-01-02 12:01:00.000000"
+      },
+      "submissions": {
+        "123456": {
+          "1": {
+            "status": "unclaimed",
+            "grader": null
+          },
+          "2": {
+            "status": "finalized",
+            "grader": "aturing@princeton.edu"
+          }
+        },
+        "123457": {
+          "1": {
+            "status": "draft",
+            "grader": "aturing@princeton.edu"
+          }
+        },
+        "123458": {
+          "2": {
+            "status": "unclaimed",
+            "grader": null
+          }
+        },
+        "123459": {
+          "1": {
+            "status": "unclaimed",
+            "grader": null
+          },
+          "2": {
+            "status": "deleted",
+            "grader": null
+          }
+        }
+      }
+    }
+  },
+  "type": "object",
+  "patternProperties": {
+    ".": {
+      "description": "The saved data for this assignment",
+      "properties": {
+        "total": {
+          "description": "The total number of submissions",
+          "type": "integer",
+          "minimum": 0
+        },
+        "finalized": {
+          "description": "The number of finalized submissions",
+          "type": "integer",
+          "minimum": 0
+        },
+        "drafts": {
+          "description": "The number of draft submissions",
+          "type": "integer",
+          "minimum": 0
+        },
+        "unclaimed": {
+          "description": "The number of unclaimed submissions",
+          "type": "integer",
+          "minimum": 0
+        },
+        "sent_deadline_message": {
+          "description": "The timestamp that the deadline message was sent",
+          "oneOf": [
+            {
+              "description": "No deadline message has been sent",
+              "type": "null"
+            },
+            {
+              "description": "The timestamp of the sent message in the format `YYYY-MM-DD HH:MM:SS.MMMMMM`",
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{6}"
+            }
+          ]
+        },
+        "runs": {
+          "description": "All the runs that were made by the Slack bot",
+          "patternProperties": {
+            "^\\d+$": {
+              "description": "The timestamp of this run number in the format `YYYY-MM-DD HH:MM:SS.MMMMMM`",
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{6}"
+            }
+          }
+        },
+        "submissions": {
+          "description": "The saved data for each submission in the assignment",
+          "patternProperties": {
+            "^\\d+$": {
+              "description": "The saved data for this submission id",
+              "patternProperties": {
+                "^\\d+$": {
+                  "description": "The saved data for this run number",
+                  "type": "object",
+                  "oneOf": [
+                    {
+                      "description": "An unclaimed submission (no grader)",
+                      "properties": {
+                        "status": { "const": "unclaimed" },
+                        "grader": { "const": null }
+                      }
+                    },
+                    {
+                      "description": "A draft submission",
+                      "properties": {
+                        "status": { "const": "draft" },
+                        "grader": {
+                          "description": "The grader assigned to this submission during this run",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "description": "A finalized submission",
+                      "properties": {
+                        "status": { "const": "finalized" },
+                        "grader": {
+                          "description": "The grader assigned to this submission during this run",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "description": "A deleted submission (no grader)",
+                      "properties": {
+                        "status": { "const": "deleted" },
+                        "grader": { "const": null }
+                      }
+                    }
+                  ],
+                  "required": ["status", "grader"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "total",
+        "finalized",
+        "drafts",
+        "unclaimed",
+        "sent_deadline_message",
+        "runs",
+        "submissions"
+      ]
+    }
+  }
+}

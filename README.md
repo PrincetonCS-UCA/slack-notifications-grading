@@ -98,6 +98,11 @@ with possible variable replacements. The following keys are supported:
 - If there are changes, trigger a Slack notification,
 - Update the cached data.
 
+## Output Format
+
+To see the format of the saved data, see the schema for the data at
+['data_schema.json'](data_schema.json).
+
 ## References
 
 - `utas_slack_bot.py` is the bot that is used to send Slack notifications based
