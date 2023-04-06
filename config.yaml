@@ -45,7 +45,8 @@ sources:
       - name: 'Guitar'
         start: '2023-04-04'
         end: '2023-04-12'
-        deadline: '2023-04-07 23:59'
+        # started late, so deadline is extended by one day
+        deadline: '2023-04-08 23:59'
       - name: 'Markov'
         start: '2023-04-11'
         end: '2023-04-19'
